@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.4] — 2026-02-07
+
+### Fixed
+
+- **CSP connect-src wildcard mismatch** — CSP `*.1drv.com` only matches one subdomain level, but Graph API `/content` redirects to multi-level CDN domains like `public.dm.files.1drv.com`; broadened `connect-src` to `https:` since Microsoft CDN domains are unpredictable
+
+---
+
 ## [0.9.3] — 2026-02-07
 
 ### Fixed
