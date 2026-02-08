@@ -23,6 +23,7 @@ import { renderArticleList } from '../components/article-list';
 import { renderArticleHeader } from '../components/article-header';
 import { showToast } from '../components/toast';
 import { RECIPES } from '../recipes';
+import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
 
 let articles: OneDriveArticleMeta[] = [];
 let cachedIds = new Set<string>();
@@ -283,24 +284,45 @@ async function openArticle(id: string): Promise<void> {
 
   frame.onload = () => {
     fixAnchorLinks(frame);
+    // Mobile gestures
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      initOverscrollNav(frame, (dir) => {
+        const filtered = getFilteredArticles();
+        const idx = filtered.findIndex(a => a.id === id);
+        const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
+        if (target) openArticle(target.id);
+      });
+    }
   };
 
   showReaderState('content');
 
   // Mobile: show reading pane
   document.body.classList.add('mobile-reading');
+
+  // Mobile gestures: back swipe
+  if (window.matchMedia('(max-width: 767px)').matches) {
+    const readingPane = document.querySelector('.reading-pane') as HTMLElement;
+    if (readingPane) {
+      destroyGestures();
+      initBackSwipe(readingPane, () => goBack());
+    }
+  }
+}
+
+function goBack(): void {
+  destroyGestures();
+  document.body.classList.remove('mobile-reading');
+  currentId = null;
+  renderList();
+  showReaderState('placeholder');
 }
 
 function setupArticleActions(meta: OneDriveArticleMeta): void {
   // Back button (mobile)
   const backBtn = document.getElementById('backBtn');
   if (backBtn) {
-    backBtn.addEventListener('click', () => {
-      document.body.classList.remove('mobile-reading');
-      currentId = null;
-      renderList();
-      showReaderState('placeholder');
-    });
+    backBtn.addEventListener('click', () => goBack());
   }
 
   // Favorite toggle
@@ -515,10 +537,7 @@ function setupKeyboardShortcuts(): void {
         break;
       case 'Escape': // Close reader on mobile
         if (document.body.classList.contains('mobile-reading')) {
-          document.body.classList.remove('mobile-reading');
-          currentId = null;
-          renderList();
-          showReaderState('placeholder');
+          goBack();
         }
         break;
     }

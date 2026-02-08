@@ -4,6 +4,19 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.6] — 2026-02-07
+
+### Added
+
+- **Swipe-back gesture** — Swipe right from the left edge on mobile to return to the article list, with animated indicator
+- **Overscroll article navigation** — Pull down at the top or up at the bottom of an article to navigate to the previous/next article
+
+### Fixed
+
+- **Mobile horizontal scroll** — Added `overscroll-behavior: none` and `visibility: hidden` on off-screen reading pane to prevent iOS Safari rubber-band scrolling
+
+---
+
 ## [0.9.5] — 2026-02-07
 
 ### Fixed
