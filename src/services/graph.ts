@@ -30,7 +30,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   // Use saved delta link if available, otherwise start fresh
   let url: string | null = savedToken
     ? savedToken
-    : `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}:/children/delta?$select=name,deleted`;
+    : `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}:/delta`;
 
   const upserted: OneDriveArticleMeta[] = [];
   const deleted: string[] = [];
@@ -40,15 +40,11 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
       const res: Response = await fetch(url, { headers });
 
       if (!res.ok) {
-        if (res.status === 404) {
-          // No articles folder yet, or delta token expired — reset
+        if (res.status === 404 || res.status === 410) {
+          // Folder doesn't exist yet or delta token expired — fall back to full list
           localStorage.removeItem(DELTA_TOKEN_KEY);
-          return { upserted: [], deleted: [] };
-        }
-        // Delta token may have expired (410 Gone) — do a full re-sync
-        if (res.status === 410) {
-          localStorage.removeItem(DELTA_TOKEN_KEY);
-          return syncArticles(); // retry without token
+          const allMeta = await listArticles();
+          return { upserted: allMeta, deleted: [] };
         }
         const body = await res.text().catch(() => '');
         throw new Error(`Delta sync failed: ${res.status} ${body}`);
