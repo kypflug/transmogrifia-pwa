@@ -40,6 +40,9 @@ export function renderArticleHeader(
         <button class="action-btn orig-btn" id="origBtn" title="Open original article">
           🔗
         </button>
+        <button class="action-btn del-btn" id="delBtn" title="Delete article">
+          🗑️
+        </button>
       </div>
     </div>
   `;

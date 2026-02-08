@@ -59,6 +59,41 @@ export async function cacheAllMeta(metas: OneDriveArticleMeta[]): Promise<void> 
   });
 }
 
+/**
+ * Merge delta sync results into the cache.
+ * Upserts changed articles and removes deleted ones.
+ * Returns the full list of cached metadata after the merge.
+ */
+export async function mergeDeltaIntoCache(
+  upserted: OneDriveArticleMeta[],
+  deleted: string[],
+): Promise<OneDriveArticleMeta[]> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    const metaStore = tx.objectStore(META_STORE);
+    const htmlStore = tx.objectStore(HTML_STORE);
+
+    // Upsert changed metadata
+    for (const meta of upserted) {
+      metaStore.put(meta);
+    }
+
+    // Delete removed articles (both meta and HTML)
+    for (const id of deleted) {
+      metaStore.delete(id);
+      htmlStore.delete(id);
+    }
+
+    tx.oncomplete = async () => {
+      // Return the full updated list
+      const allMeta = await getCachedMeta();
+      resolve(allMeta);
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 /** Get all cached metadata */
 export async function getCachedMeta(): Promise<OneDriveArticleMeta[]> {
   const database = await getDB();
@@ -112,6 +147,18 @@ export async function getCacheStats(): Promise<{ count: number; totalSize: numbe
     count: cachedIds.size,
     totalSize: cachedMetas.reduce((sum, m) => sum + m.size, 0),
   };
+}
+
+/** Delete a single article from cache (both meta and HTML) */
+export async function deleteCachedArticle(id: string): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    tx.objectStore(META_STORE).delete(id);
+    tx.objectStore(HTML_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 /** Clear all cached data */

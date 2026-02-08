@@ -4,6 +4,18 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.0] — 2026-02-08
+
+### Added
+
+- **Delta sync** — Uses Microsoft Graph delta API for incremental article syncing across devices, replacing full-list fetches
+- **Instant cache-first loading** — Cached articles display immediately on launch while syncing happens in the background
+- **Sync button** — Manual refresh button (⟳) in the sidebar header to trigger a sync on demand
+- **Delete article** — Trash button in the reader header bar to delete articles from OneDrive with confirmation prompt
+- **Merge-based caching** — Delta results are merged into the local cache instead of replacing it, preventing articles from disappearing during stale listings
+
+---
+
 ## [0.9.7] — 2026-02-07
 
 ### Fixed

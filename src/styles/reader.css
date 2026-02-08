@@ -151,6 +151,11 @@
   border-color: #F2A900;
 }
 
+.del-btn:hover {
+  color: var(--edge-red, #dc3545);
+  border-color: var(--edge-red, #dc3545);
+}
+
 /* ===== Content Iframe ===== */
 .content-frame {
   flex: 1;

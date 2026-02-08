@@ -1,8 +1,7 @@
 import type { OneDriveArticleMeta, SortOrder, FilterMode } from '../types';
 import { signOut, getUserDisplayName } from '../services/auth';
-import { listArticles, downloadArticleHtml, uploadMeta } from '../services/graph';
+import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken } from '../services/graph';
 import {
-  cacheAllMeta,
   getCachedMeta,
   cacheHtml,
   getCachedHtml,
@@ -10,6 +9,8 @@ import {
   getCacheStats,
   cacheMeta,
   clearCache,
+  deleteCachedArticle,
+  mergeDeltaIntoCache,
 } from '../services/cache';
 import {
   getSortOrder,
@@ -48,6 +49,9 @@ export function renderLibrary(root: HTMLElement): void {
             <span class="brand-text">Transmogrifia</span>
           </div>
           <div class="sidebar-header-actions">
+            <button class="sync-btn" id="syncBtn" title="Sync articles">
+              <span class="sync-icon" id="syncIcon">⟳</span>
+            </button>
             <div class="user-menu-wrapper">
               <button class="user-btn" id="userBtn" title="Account menu">
                 <span class="user-initials" id="userInitials"></span>
@@ -127,6 +131,7 @@ export function renderLibrary(root: HTMLElement): void {
 
 async function initLibrary(): Promise<void> {
   setupUserMenu();
+  setupSyncButton();
   setupSearch();
   setupFilters();
   setupResizeHandle();
@@ -157,23 +162,45 @@ function populateRecipeFilters(): void {
 }
 
 async function loadArticles(): Promise<void> {
-  try {
-    // Try to load from network
-    const metas = await listArticles();
-    articles = metas;
-    await cacheAllMeta(metas);
-  } catch (err) {
-    console.warn('Failed to load from network, using cache:', err);
-    // Fall back to cached metadata
-    articles = await getCachedMeta();
-    if (articles.length === 0) {
-      showToast('Could not load articles. Check your connection.', 'error');
-    }
+  // 1. Show cached articles instantly
+  const cached = await getCachedMeta();
+  cachedIds = await getCachedHtmlIds();
+  if (cached.length > 0) {
+    articles = cached;
+    renderList();
+    updateFooter();
   }
 
-  cachedIds = await getCachedHtmlIds();
-  renderList();
-  updateFooter();
+  // 2. Sync in background via delta API
+  try {
+    setSyncIndicator(true);
+    const delta = await syncArticles();
+
+    if (delta.upserted.length > 0 || delta.deleted.length > 0) {
+      // Merge changes into cache and update in-memory list
+      articles = await mergeDeltaIntoCache(delta.upserted, delta.deleted);
+
+      // Remove deleted IDs from cached HTML set
+      for (const id of delta.deleted) cachedIds.delete(id);
+
+      renderList();
+      updateFooter();
+    } else if (cached.length === 0) {
+      // First load with no cache — articles are already in the delta result
+      // (delta on first run returns everything, but upserted will be empty
+      //  only if there are truly no articles)
+      articles = await getCachedMeta();
+      renderList();
+      updateFooter();
+    }
+  } catch (err) {
+    console.warn('Background sync failed:', err);
+    if (cached.length === 0) {
+      showToast('Could not load articles. Check your connection.', 'error');
+    }
+  } finally {
+    setSyncIndicator(false);
+  }
 }
 
 function getFilteredArticles(): OneDriveArticleMeta[] {
@@ -343,6 +370,12 @@ function setupArticleActions(meta: OneDriveArticleMeta): void {
       window.open(meta.originalUrl, '_blank', 'noopener');
     });
   }
+
+  // Delete article
+  const delBtn = document.getElementById('delBtn');
+  if (delBtn) {
+    delBtn.addEventListener('click', () => confirmDeleteArticle(meta));
+  }
 }
 
 async function toggleFavorite(id: string): Promise<void> {
@@ -381,6 +414,30 @@ async function toggleFavorite(id: string): Promise<void> {
     renderList();
     await cacheMeta(meta);
     showToast('Failed to update favorite', 'error');
+  }
+}
+
+async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
+  const title = meta.title.length > 50 ? meta.title.slice(0, 50) + '…' : meta.title;
+  if (!confirm(`Delete "${title}"?\n\nThis will remove the article from OneDrive and cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    // Remove from OneDrive
+    await deleteArticle(meta.id);
+    // Remove from local cache
+    await deleteCachedArticle(meta.id);
+    // Remove from in-memory list
+    articles = articles.filter(a => a.id !== meta.id);
+    cachedIds.delete(meta.id);
+    // Navigate back
+    goBack();
+    updateFooter();
+    showToast('Article deleted');
+  } catch (err) {
+    console.error('Failed to delete article:', err);
+    showToast('Failed to delete article', 'error');
   }
 }
 
@@ -430,17 +487,21 @@ function setupUserMenu(): void {
 
   document.getElementById('signOutBtn')!.addEventListener('click', async () => {
     await clearCache();
+    clearDeltaToken();
     await signOut();
     window.location.reload();
   });
 
   document.getElementById('clearCacheBtn')!.addEventListener('click', async () => {
     await clearCache();
+    clearDeltaToken();
     cachedIds = new Set();
+    articles = [];
     renderList();
     updateFooter();
-    showToast('Cache cleared');
+    showToast('Cache cleared — syncing…');
     dropdown.classList.add('hidden');
+    await loadArticles();
   });
 }
 
@@ -556,6 +617,27 @@ function setupOfflineHandling(): void {
   window.addEventListener('online', updateStatus);
   window.addEventListener('offline', updateStatus);
   updateStatus();
+}
+
+function setupSyncButton(): void {
+  const syncBtn = document.getElementById('syncBtn');
+  if (syncBtn) {
+    syncBtn.addEventListener('click', async () => {
+      await loadArticles();
+      showToast('Sync complete');
+    });
+  }
+}
+
+function setSyncIndicator(syncing: boolean): void {
+  const icon = document.getElementById('syncIcon');
+  if (icon) {
+    icon.classList.toggle('spinning', syncing);
+  }
+  const btn = document.getElementById('syncBtn') as HTMLButtonElement | null;
+  if (btn) {
+    btn.disabled = syncing;
+  }
 }
 
 async function updateFooter(): Promise<void> {
