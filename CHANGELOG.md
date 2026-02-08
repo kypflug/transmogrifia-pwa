@@ -4,6 +4,16 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.3] — 2026-02-07
+
+### Fixed
+
+- **CSP blocking Graph API content downloads** — Added `https://*.1drv.com` and `https://*.sharepoint.com` to `connect-src`; Graph `/content` endpoints return 302 redirects to OneDrive CDN domains, which were being blocked
+- **Deprecated meta tag** — Replaced `apple-mobile-web-app-capable` with `mobile-web-app-capable`
+- **Unused hero preload warning** — Removed `<link rel="preload">` for hero image (only used on sign-in screen, not every page)
+
+---
+
 ## [0.9.2] — 2026-02-07
 
 ### Fixed
