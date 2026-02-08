@@ -24,50 +24,23 @@ const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'
 
 let msalInstance: PublicClientApplication | null = null;
 
-/**
- * Detect iOS (iPhone, iPad, iPod) — all iOS browsers use WebKit and
- * have the same popup/cross-tab limitations as Safari.
- * iPadOS 13+ reports "MacIntel" but has touch support.
- */
-function useRedirectFlow(): boolean {
-  const ua = navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  return isIOS;
-}
-
-/** Resolves once MSAL has been initialized and any redirect response handled. */
-let redirectAccountPromise: Promise<AccountInfo | null> | null = null;
-
 export async function initAuth(): Promise<PublicClientApplication> {
   if (msalInstance) return msalInstance;
   msalInstance = new PublicClientApplication(msalConfig);
   await msalInstance.initialize();
 
-  // Handle redirect promise (for loginRedirect / acquireTokenRedirect flow).
-  // Cache the promise so callers can await the redirect account result.
+  // Handle redirect promise (for loginRedirect flow)
   // On Safari/iOS, this can throw errors if there's a stale redirect state,
   // localStorage issues, or cookie restrictions. We catch and log the error
   // but allow initialization to continue so the app can still load.
   try {
-    redirectAccountPromise = msalInstance.handleRedirectPromise().then(
-      (result: AuthenticationResult | null) => result?.account ?? null,
-    );
-    await redirectAccountPromise;
+    await msalInstance.handleRedirectPromise();
   } catch (err) {
     console.warn('handleRedirectPromise failed (non-fatal):', err);
-    redirectAccountPromise = Promise.resolve(null);
+    // If this fails, the user might need to sign in again, but the app should still load
   }
 
   return msalInstance;
-}
-
-/**
- * If the current page load is a redirect return from a login flow,
- * returns the newly-signed-in account. Otherwise returns null.
- */
-export async function getRedirectAccount(): Promise<AccountInfo | null> {
-  return redirectAccountPromise ?? null;
 }
 
 export function getAccount(): AccountInfo | null {
@@ -78,18 +51,6 @@ export function getAccount(): AccountInfo | null {
 
 export async function signIn(): Promise<AccountInfo> {
   const msal = await initAuth();
-
-  // On iOS, popup-based auth is unreliable (opens a new tab and cross-tab
-  // communication is blocked by ITP). Use redirect flow instead.
-  if (useRedirectFlow()) {
-    await msal.loginRedirect({
-      scopes: LOGIN_SCOPES,
-      prompt: 'select_account',
-    });
-    // Page will navigate away; this throw prevents further execution.
-    throw new Error('Redirecting for login…');
-  }
-
   try {
     const result: AuthenticationResult = await msal.loginPopup({
       scopes: LOGIN_SCOPES,
@@ -106,14 +67,9 @@ export async function signIn(): Promise<AccountInfo> {
 export async function signOut(): Promise<void> {
   const msal = await initAuth();
   const account = getAccount();
-  if (!account) return;
-
-  if (useRedirectFlow()) {
-    await msal.logoutRedirect({ account });
-    return;
+  if (account) {
+    await msal.logoutPopup({ account });
   }
-
-  await msal.logoutPopup({ account });
 }
 
 export async function getAccessToken(): Promise<string> {
@@ -132,12 +88,6 @@ export async function getAccessToken(): Promise<string> {
     return result.accessToken;
   } catch (err) {
     if (err instanceof InteractionRequiredAuthError) {
-      // On iOS, skip popup and go straight to redirect
-      if (useRedirectFlow()) {
-        await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
-        throw new Error('Redirecting for token…');
-      }
-
       try {
         const result = await msal.acquireTokenPopup({
           scopes: LOGIN_SCOPES,
@@ -147,7 +97,7 @@ export async function getAccessToken(): Promise<string> {
         }
         return result.accessToken;
       } catch {
-        // Popup blocked — fall back to redirect
+        // Popup blocked (e.g. Safari/iOS) — fall back to redirect
         await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
         throw new Error('Redirecting for token…');
       }

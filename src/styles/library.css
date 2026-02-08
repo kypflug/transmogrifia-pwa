@@ -191,15 +191,6 @@
   font-family: inherit;
 }
 
-/* iOS Safari auto-zooms inputs with font-size < 16px on focus */
-@supports (-webkit-touch-callout: none) {
-  .search-input,
-  .filter-select,
-  .sort-select {
-    font-size: 16px;
-  }
-}
-
 .search-input::placeholder {
   color: var(--edge-text-tertiary);
 }

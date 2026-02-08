@@ -26,11 +26,6 @@ import { showToast } from '../components/toast';
 import { RECIPES } from '../recipes';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
 
-/** Iframe element with expando for tracking the load handler. */
-interface ExtendedIFrame extends HTMLIFrameElement {
-  __pwaLoadHandler?: () => void;
-}
-
 let articles: OneDriveArticleMeta[] = [];
 let cachedIds = new Set<string>();
 let currentId: string | null = null;
@@ -38,8 +33,6 @@ let searchQuery = '';
 let sortOrder: SortOrder = 'newest';
 let filterMode: FilterMode = 'all';
 let container: HTMLElement;
-/** Incremented on each openArticle call to invalidate stale callbacks. */
-let articleGeneration = 0;
 
 export function renderLibrary(root: HTMLElement): void {
   container = root;
@@ -313,9 +306,7 @@ async function openArticle(id: string): Promise<void> {
   // Render in iframe
   const frame = document.getElementById('contentFrame') as HTMLIFrameElement;
   // Inject styles: hide extension UI + lock horizontal scroll
-  // data-pwa-injected is a marker used to verify the real srcdoc has loaded
-  // (as opposed to an intermediate about:blank document on iOS Safari).
-  const injectedStyles = `<style data-pwa-injected>
+  const injectedStyles = `<style>
     .remix-save-fab { display: none !important; }
     html, body {
       max-width: 100vw !important;
@@ -331,116 +322,41 @@ async function openArticle(id: string): Promise<void> {
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
   </style>`;
 
-  // ── Robust iframe document readiness ──────────────────────────────
-  // iOS Safari can replace the contentDocument multiple times for srcdoc
-  // iframes (about:blank → interim → real content). Attaching gesture
-  // listeners to an intermediate document silently orphans them.
-  //
-  // Strategy:
-  //  1. Look for our injected <style data-pwa-injected> marker to confirm
-  //     the real content has loaded (about:blank won't have it).
-  //  2. Use setTimeout-based retries (rAF can fire before the document
-  //     settles on iOS Safari).
-  //  3. Listen for the load event AND poll independently — belt-and-braces.
-  //  4. After attachment, monitor for document replacement and re-attach.
-  // ──────────────────────────────────────────────────────────────────────
-
-  // Generation counter: incremented each time openArticle is called so
-  // stale callbacks from a previous article are discarded.
-  const gen = ++articleGeneration;
-  let setupDone = false;
-  let docMonitorTimer: ReturnType<typeof setInterval> | null = null;
-  let attachedDocEl: Element | null = null;
-
-  function isStale(): boolean {
-    return gen !== articleGeneration;
-  }
-
-  /** Returns true if the real srcdoc content is present. */
-  function isContentReady(): boolean {
-    try {
+  // Set onload BEFORE srcdoc — srcdoc iframes can fire load for about:blank
+  // before the real content; attaching handlers afterward risks missing it
+  frame.onload = () => {
+    // iOS Safari can replace the contentDocument after the load event;
+    // retry with rAF until the document is fully settled.
+    let attempts = 0;
+    function trySetup() {
       const doc = frame.contentDocument;
-      return !!doc?.querySelector('style[data-pwa-injected]');
-    } catch {
-      return false;
-    }
-  }
-
-  function doSetup(): boolean {
-    if (setupDone || isStale()) return true; // already done or superseded
-    if (!isContentReady()) return false;
-
-    const doc = frame.contentDocument!;
-    setupDone = true;
-    attachedDocEl = doc.documentElement;
-
-    fixAnchorLinks(frame);
-    destroyGestures();
-
-    // Back swipe — handler checks viewport width at swipe time
-    const readingPane = document.querySelector('.reading-pane') as HTMLElement;
-    if (readingPane) {
-      initBackSwipe(readingPane, frame, () => goBack());
-    }
-
-    // Overscroll prev/next
-    initOverscrollNav(frame, (dir) => {
-      const filtered = getFilteredArticles();
-      const idx = filtered.findIndex(a => a.id === id);
-      const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
-      if (target) openArticle(target.id);
-    });
-
-    // Monitor for document replacement (iOS Safari may swap the document
-    // out after initial load). Check for 5 seconds.
-    let monitorChecks = 0;
-    docMonitorTimer = setInterval(() => {
-      if (isStale() || ++monitorChecks > 25) {
-        if (docMonitorTimer) clearInterval(docMonitorTimer);
+      if (!doc || !doc.body) {
+        if (++attempts < 10) requestAnimationFrame(trySetup);
         return;
       }
-      try {
-        const currentEl = frame.contentDocument?.documentElement;
-        if (currentEl && currentEl !== attachedDocEl) {
-          // Document was silently replaced — re-attach gestures.
-          setupDone = false;
-          doSetup();
-        }
-      } catch { /* cross-origin or detached — ignore */ }
-    }, 200);
 
-    return true;
-  }
+      fixAnchorLinks(frame);
 
-  // ── Load-event listener (fires for each navigation, including about:blank)
-  function onFrameLoad() {
-    if (isStale()) return;
-    // Retry with setTimeout — more reliable on iOS than rAF
-    let retries = 0;
-    function retry() {
-      if (isStale() || doSetup()) return;
-      if (++retries < 15) setTimeout(retry, 80);
+      // Gestures — attach to the settled contentDocument
+      destroyGestures();
+
+      // Back swipe — always initialised; the handler itself checks viewport
+      // width at swipe time so resizing from wide → narrow works immediately.
+      const readingPane = document.querySelector('.reading-pane') as HTMLElement;
+      if (readingPane) {
+        initBackSwipe(readingPane, frame, () => goBack());
+      }
+
+      // Overscroll prev/next works on all viewports
+      initOverscrollNav(frame, (dir) => {
+        const filtered = getFilteredArticles();
+        const idx = filtered.findIndex(a => a.id === id);
+        const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
+        if (target) openArticle(target.id);
+      });
     }
-    // First attempt after a short delay to let the document settle
-    setTimeout(retry, 50);
-  }
-
-  // Remove any previous listener (keyed by expandos on the element)
-  if ((frame as ExtendedIFrame).__pwaLoadHandler) {
-    frame.removeEventListener('load', (frame as ExtendedIFrame).__pwaLoadHandler!);
-  }
-  (frame as ExtendedIFrame).__pwaLoadHandler = onFrameLoad;
-  frame.addEventListener('load', onFrameLoad);
-
-  // ── Polling failsafe — independent of the load event ──────────────
-  // If onload never fires (observed on some iOS Safari versions for
-  // srcdoc changes), this catches the document once it's ready.
-  let pollCount = 0;
-  const pollTimer = setInterval(() => {
-    if (isStale() || doSetup() || ++pollCount >= 50) {
-      clearInterval(pollTimer);
-    }
-  }, 100);
+    requestAnimationFrame(trySetup);
+  };
 
   frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
 
