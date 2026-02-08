@@ -159,7 +159,7 @@ export function initOverscrollNav(
   function getScrollInfo(): { atTop: boolean; atBottom: boolean } {
     try {
       const doc = frame.contentDocument;
-      if (!doc || !doc.documentElement) return { atTop: true, atBottom: true };
+      if (!doc || !doc.documentElement) return { atTop: false, atBottom: false };
       const el = doc.documentElement;
       const scrollTop = el.scrollTop || doc.body?.scrollTop || 0;
       const scrollHeight = el.scrollHeight || doc.body?.scrollHeight || 0;
@@ -221,15 +221,12 @@ export function initOverscrollNav(
 
   const handlers = { onStart: onTouchStart, onMove: onTouchMove, onEnd: onTouchEnd };
 
-  // Attach to iframe contentDocument directly
+  // Attach to iframe contentDocument only — overscroll nav should only trigger
+  // from within the article content, not the header bar
   const iframeDoc = getIframeDocument(frame);
   if (iframeDoc) {
     cleanupFns.push(attachTouchListeners(iframeDoc, handlers));
   }
-
-  // Also attach to the pane (header bar)
-  const pane = (frame.closest('.reading-pane') || frame.parentElement!) as HTMLElement;
-  cleanupFns.push(attachTouchListeners(pane, handlers));
 }
 
 // ── Cleanup ─────────────────────────────────────────────────────────────────

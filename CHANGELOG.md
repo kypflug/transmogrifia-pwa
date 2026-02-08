@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.4] — 2026-02-08
+
+### Fixed
+
+- **Overscroll nav triggers too easily** — Removed overscroll prev/next listeners from the reading pane (header bar); overscroll navigation now only triggers from within the article iframe when actually scrolled to the top or bottom. Also fixed the fallback scroll check to default to "not at edge" when the iframe document is inaccessible
+
+---
+
 ## [0.10.3] — 2026-02-08
 
 ### Fixed
