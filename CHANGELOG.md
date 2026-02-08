@@ -4,11 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [0.10.10] — 2026-02-08
 
 ### Fixed
 
 - **Safari/iOS initialization failure** — Fixed "Failed to initialize. Please reload." error on Safari iOS by adding error handling around `handleRedirectPromise()` in MSAL initialization; added safe localStorage wrappers to handle Safari Private Browsing mode gracefully; enhanced boot error screen with specific error messages and reload button
+- **iOS Safari sign-in** — Switched from popup to redirect auth flow on iOS devices; popup-based login (`loginPopup`) opens a new tab on iOS Safari and cross-tab communication is blocked by ITP, causing sign-in to hang or silently fail. Now uses `loginRedirect`/`logoutRedirect`/`acquireTokenRedirect` on iOS, which navigates in-place and handles the response on return via `handleRedirectPromise()`. Also applies to token renewal and sign-out flows.
+- **iOS Safari touch gestures** — Gesture listeners (back swipe, overscroll prev/next) were silently attached to an intermediate `about:blank` document and orphaned when iOS Safari replaced it with the real `srcdoc` content. Replaced `requestAnimationFrame`-based document readiness detection with a robust multi-strategy approach: injected content marker (`data-pwa-injected`), `setTimeout`-based retries, a polling failsafe independent of the `load` event, and post-attachment monitoring that re-attaches if the `contentDocument` is swapped out. Also switched from `frame.onload` assignment to `addEventListener` with a generation counter to prevent stale callbacks from previous articles.
+- **iOS Safari viewport zoom on focus** — Search box, filter, and sort controls had font sizes below 16px, causing iOS Safari to auto-zoom the viewport on focus; bumped to 16px on iOS via `@supports (-webkit-touch-callout: none)`
 
 ---
 

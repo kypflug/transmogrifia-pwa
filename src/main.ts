@@ -1,4 +1,4 @@
-import { initAuth, isSignedIn } from './services/auth';
+import { initAuth, isSignedIn, getRedirectAccount } from './services/auth';
 import { renderSignIn } from './screens/sign-in';
 import { renderLibrary } from './screens/library';
 import { applyTheme } from './theme';
@@ -12,7 +12,12 @@ async function boot(): Promise<void> {
 
   await initAuth();
 
-  if (isSignedIn()) {
+  // Check if this page load is returning from a redirect login flow (iOS).
+  // getRedirectAccount() returns non-null when handleRedirectPromise() found
+  // a newly-authenticated account from a redirect response.
+  const redirectAccount = await getRedirectAccount();
+
+  if (redirectAccount || isSignedIn()) {
     renderLibrary(app);
   } else {
     renderSignIn(app, () => renderLibrary(app));

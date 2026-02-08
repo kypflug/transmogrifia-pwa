@@ -44,6 +44,10 @@ export function renderSignIn(
       await signIn();
       onSuccess();
     } catch (err) {
+      // 'Redirecting for login…' is expected on iOS — the page is navigating
+      // away for the redirect auth flow. Keep spinner visible.
+      if (err instanceof Error && err.message.startsWith('Redirecting')) return;
+
       console.error('Sign-in failed:', err);
       btn.disabled = false;
       btn.innerHTML = `
