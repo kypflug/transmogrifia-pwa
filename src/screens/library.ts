@@ -316,25 +316,36 @@ async function openArticle(id: string): Promise<void> {
     }
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
   </style>`;
-  frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
 
+  // Set onload BEFORE srcdoc — srcdoc iframes can fire load for about:blank
+  // before the real content; attaching handlers afterward risks missing it
   frame.onload = () => {
-    fixAnchorLinks(frame);
-    // Mobile gestures — must init after iframe loads so contentDocument is available
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      destroyGestures();
-      const readingPane = document.querySelector('.reading-pane') as HTMLElement;
-      if (readingPane) {
-        initBackSwipe(readingPane, frame, () => goBack());
+    // Defer to next tick so the contentDocument is fully settled (iOS Safari
+    // can replace the Document object between the load event and microtask)
+    setTimeout(() => {
+      const doc = frame.contentDocument;
+      if (!doc || !doc.body) return;
+
+      fixAnchorLinks(frame);
+
+      // Mobile gestures — attach to the settled contentDocument
+      if (window.matchMedia('(max-width: 767px)').matches) {
+        destroyGestures();
+        const readingPane = document.querySelector('.reading-pane') as HTMLElement;
+        if (readingPane) {
+          initBackSwipe(readingPane, frame, () => goBack());
+        }
+        initOverscrollNav(frame, (dir) => {
+          const filtered = getFilteredArticles();
+          const idx = filtered.findIndex(a => a.id === id);
+          const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
+          if (target) openArticle(target.id);
+        });
       }
-      initOverscrollNav(frame, (dir) => {
-        const filtered = getFilteredArticles();
-        const idx = filtered.findIndex(a => a.id === id);
-        const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
-        if (target) openArticle(target.id);
-      });
-    }
+    }, 0);
   };
+
+  frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
 
   showReaderState('content');
 

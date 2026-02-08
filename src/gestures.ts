@@ -22,6 +22,21 @@ let overscrollIndicator: HTMLElement | null = null;
 let cleanupFns: Array<() => void> = [];
 
 /**
+ * Safely get the iframe's Document, trying both contentDocument and
+ * contentWindow.document. Returns null if inaccessible (cross-origin
+ * or document not yet loaded).
+ */
+function getIframeDocument(frame: HTMLIFrameElement): Document | null {
+  try {
+    const doc = frame.contentDocument ?? frame.contentWindow?.document ?? null;
+    if (!doc || !doc.body) return null;
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Attach touch listeners to an EventTarget (HTMLElement or Document).
  * Returns a cleanup function.
  */
@@ -123,12 +138,10 @@ export function initBackSwipe(
   cleanupFns.push(attachTouchListeners(pane, handlers, false));
 
   // Attach to iframe contentDocument
-  try {
-    const doc = frame.contentDocument;
-    if (doc) {
-      cleanupFns.push(attachTouchListeners(doc, handlers, false));
-    }
-  } catch { /* cross-origin */ }
+  const iframeDoc = getIframeDocument(frame);
+  if (iframeDoc) {
+    cleanupFns.push(attachTouchListeners(iframeDoc, handlers, false));
+  }
 }
 
 // ── Overscroll prev/next ────────────────────────────────────────────────────
@@ -209,12 +222,10 @@ export function initOverscrollNav(
   const handlers = { onStart: onTouchStart, onMove: onTouchMove, onEnd: onTouchEnd };
 
   // Attach to iframe contentDocument directly
-  try {
-    const doc = frame.contentDocument;
-    if (doc) {
-      cleanupFns.push(attachTouchListeners(doc, handlers));
-    }
-  } catch { /* cross-origin */ }
+  const iframeDoc = getIframeDocument(frame);
+  if (iframeDoc) {
+    cleanupFns.push(attachTouchListeners(iframeDoc, handlers));
+  }
 
   // Also attach to the pane (header bar)
   const pane = (frame.closest('.reading-pane') || frame.parentElement!) as HTMLElement;

@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.3] — 2026-02-08
+
+### Fixed
+
+- **Gesture listeners on iframe body** — Fixed touch gestures (swipe-back, overscroll nav) not working on article content on mobile; `onload` handler is now set before `srcdoc` and gesture attachment is deferred by a tick to ensure the iframe's `contentDocument` is fully settled before listeners are attached
+
+---
+
 ## [0.10.2] — 2026-02-08
 
 ### Added
