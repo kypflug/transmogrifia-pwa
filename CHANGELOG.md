@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.5] — 2026-02-07
+
+### Fixed
+
+- **Iframe sandbox warning** — Removed `allow-scripts` from article iframe sandbox; articles render fine without JS and this eliminates the "escape sandboxing" console warning
+- **Google Fonts blocked in articles** — Added `fonts.googleapis.com` to CSP `style-src` and `fonts.gstatic.com` to `font-src` so article stylesheets can load web fonts
+
+---
+
 ## [0.9.4] — 2026-02-07
 
 ### Fixed

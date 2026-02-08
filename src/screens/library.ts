@@ -102,7 +102,7 @@ export function renderLibrary(root: HTMLElement): void {
           <iframe
             id="contentFrame"
             class="content-frame"
-            sandbox="allow-same-origin allow-scripts"
+            sandbox="allow-same-origin"
             title="Article content"
           ></iframe>
         </div>
