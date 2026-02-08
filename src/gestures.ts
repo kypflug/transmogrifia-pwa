@@ -155,15 +155,41 @@ export function initOverscrollNav(
   let direction: 'prev' | 'next' | null = null;
   let overscroll = 0;
   let didTrigger = false;
+  // Scroll state captured at touchstart — do NOT re-check during move,
+  // because the browser's native scroll will shift scrollTop immediately.
+  let wasAtTop = false;
+  let wasAtBottom = false;
+  let decided = false;
 
   function getScrollInfo(): { atTop: boolean; atBottom: boolean } {
     try {
       const doc = frame.contentDocument;
-      if (!doc || !doc.documentElement) return { atTop: false, atBottom: false };
-      const el = doc.documentElement;
-      const scrollTop = el.scrollTop || doc.body?.scrollTop || 0;
-      const scrollHeight = el.scrollHeight || doc.body?.scrollHeight || 0;
-      const clientHeight = el.clientHeight || doc.body?.clientHeight || 0;
+      if (!doc) return { atTop: false, atBottom: false };
+
+      // In srcdoc iframes, which element actually scrolls varies by browser.
+      // Check documentElement and body; pick the one with real overflow.
+      const html = doc.documentElement;
+      const body = doc.body;
+      if (!html) return { atTop: false, atBottom: false };
+
+      // Find the element whose scrollHeight exceeds its clientHeight
+      let scrollTop = 0;
+      let scrollHeight = 0;
+      let clientHeight = 0;
+
+      if (html.scrollHeight > html.clientHeight + 1) {
+        scrollTop = html.scrollTop;
+        scrollHeight = html.scrollHeight;
+        clientHeight = html.clientHeight;
+      } else if (body && body.scrollHeight > body.clientHeight + 1) {
+        scrollTop = body.scrollTop;
+        scrollHeight = body.scrollHeight;
+        clientHeight = body.clientHeight;
+      } else {
+        // Content fits without scrolling — no overscroll nav
+        return { atTop: false, atBottom: false };
+      }
+
       return {
         atTop: scrollTop <= 1,
         atBottom: scrollTop + clientHeight >= scrollHeight - 1,
@@ -174,35 +200,42 @@ export function initOverscrollNav(
   }
 
   function onTouchStart(e: TouchEvent) {
-    const { atTop, atBottom } = getScrollInfo();
-    if (!atTop && !atBottom) return;
+    const info = getScrollInfo();
+    wasAtTop = info.atTop;
+    wasAtBottom = info.atBottom;
+
+    if (!wasAtTop && !wasAtBottom) return;
 
     tracking = true;
+    decided = false;
     didTrigger = false;
     startY = e.touches[0].clientY;
     direction = null;
     overscroll = 0;
-    ensureOverscrollIndicator();
   }
 
   function onTouchMove(e: TouchEvent) {
     if (!tracking) return;
     const dy = e.touches[0].clientY - startY;
-    const { atTop, atBottom } = getScrollInfo();
 
-    if (dy > 10 && atTop) {
-      direction = 'prev';
-      overscroll = dy;
-    } else if (dy < -10 && atBottom) {
-      direction = 'next';
-      overscroll = Math.abs(dy);
-    } else {
-      direction = null;
-      overscroll = 0;
-      hideOverscrollIndicator();
-      return;
+    // Decide direction once after a small movement threshold
+    if (!decided && Math.abs(dy) > 10) {
+      decided = true;
+      if (dy > 0 && wasAtTop) {
+        direction = 'prev';
+      } else if (dy < 0 && wasAtBottom) {
+        direction = 'next';
+      } else {
+        // User is scrolling in the normal direction — stop tracking
+        tracking = false;
+        return;
+      }
+      ensureOverscrollIndicator();
     }
 
+    if (!decided || !direction) return;
+
+    overscroll = Math.abs(dy);
     const progress = Math.min(overscroll / OVERSCROLL_THRESHOLD, 1);
     updateOverscrollIndicator(direction, progress);
   }

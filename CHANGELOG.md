@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.5] — 2026-02-08
+
+### Fixed
+
+- **Overscroll nav scroll detection** — Fixed `getScrollInfo` to explicitly check both `documentElement` and `body` for scroll overflow instead of relying on `scrollingElement`, which doesn't work reliably in sandboxed srcdoc iframes; also lock scroll state at `touchstart` and decide gesture direction once so native scroll doesn't invalidate the check mid-gesture
+
+---
+
 ## [0.10.4] — 2026-02-08
 
 ### Fixed
