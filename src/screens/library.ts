@@ -118,7 +118,10 @@ export function renderLibrary(root: HTMLElement): void {
     </div>
   `;
 
-  initLibrary();
+  initLibrary().catch(err => {
+    console.error('Library init failed:', err);
+    showToast('Failed to load library', 'error');
+  });
 }
 
 async function initLibrary(): Promise<void> {

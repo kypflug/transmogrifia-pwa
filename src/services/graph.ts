@@ -17,16 +17,19 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
   const headers = await authHeaders();
   const metas: OneDriveArticleMeta[] = [];
 
+  // Don't use $filter — it's not supported on consumer OneDrive.
+  // Filter for .json files client-side instead.
   let url: string | null =
     `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}:/children` +
-    `?$filter=endswith(name,'.json')&$select=name`;
+    `?$select=name&$top=200`;
 
   while (url) {
     const res = await fetch(url, { headers });
 
     if (!res.ok) {
       if (res.status === 404) return []; // no articles folder yet
-      throw new Error(`List articles failed: ${res.status}`);
+      const body = await res.text().catch(() => '');
+      throw new Error(`List articles failed: ${res.status} ${body}`);
     }
 
     const data = await res.json();
@@ -38,8 +41,8 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
       try {
         const meta = await downloadMeta(id, headers);
         metas.push(meta);
-      } catch {
-        console.warn('Skipping unreadable metadata:', name);
+      } catch (err) {
+        console.warn('Skipping unreadable metadata:', name, err);
       }
     }
 
