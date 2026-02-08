@@ -49,7 +49,13 @@ boot().catch(err => {
     <div class="boot-error-screen">
       <p class="boot-error-title">⚠️ ${errorMessage}</p>
       ${errorDetails ? `<p class="boot-error-details">${errorDetails}</p>` : ''}
-      <button class="boot-error-reload" onclick="window.location.reload()">Reload</button>
+      <button class="boot-error-reload" id="bootErrorReload">Reload</button>
     </div>
   `;
+  
+  // Attach event listener programmatically for CSP compliance
+  const reloadBtn = document.getElementById('bootErrorReload');
+  if (reloadBtn) {
+    reloadBtn.addEventListener('click', () => window.location.reload());
+  }
 });

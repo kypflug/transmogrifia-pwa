@@ -1,4 +1,5 @@
 import type { SortOrder, FilterMode, Theme } from '../types';
+import { safeGetItem, safeSetItem } from '../utils/storage';
 
 const KEYS = {
   sort: 'transmogrifia-sort',
@@ -7,25 +8,8 @@ const KEYS = {
   sidebarWidth: 'transmogrifia-sidebar-width',
 } as const;
 
-// Safari Private Browsing and iOS can throw on localStorage access
-function safeGetItem(key: string, fallback: string): string {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function safeSetItem(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Silent fail on Safari Private Browsing
-  }
-}
-
 export function getSortOrder(): SortOrder {
-  return safeGetItem(KEYS.sort, 'newest') as SortOrder;
+  return (safeGetItem(KEYS.sort) || 'newest') as SortOrder;
 }
 
 export function setSortOrder(order: SortOrder): void {
@@ -33,7 +17,7 @@ export function setSortOrder(order: SortOrder): void {
 }
 
 export function getFilterMode(): FilterMode {
-  return safeGetItem(KEYS.filter, 'all') as FilterMode;
+  return (safeGetItem(KEYS.filter) || 'all') as FilterMode;
 }
 
 export function setFilterMode(mode: FilterMode): void {
@@ -41,7 +25,7 @@ export function setFilterMode(mode: FilterMode): void {
 }
 
 export function getTheme(): Theme {
-  return safeGetItem(KEYS.theme, 'system') as Theme;
+  return (safeGetItem(KEYS.theme) || 'system') as Theme;
 }
 
 export function setTheme(theme: Theme): void {
@@ -49,7 +33,7 @@ export function setTheme(theme: Theme): void {
 }
 
 export function getSidebarWidth(): number {
-  const stored = safeGetItem(KEYS.sidebarWidth, '340');
+  const stored = safeGetItem(KEYS.sidebarWidth) || '340';
   return parseInt(stored, 10);
 }
 

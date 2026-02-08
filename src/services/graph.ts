@@ -1,34 +1,10 @@
 import { getAccessToken } from './auth';
 import type { OneDriveArticleMeta, UserProfile } from '../types';
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const APP_FOLDER = 'articles';
 const DELTA_TOKEN_KEY = 'transmogrifia_delta_token';
-
-// Safari Private Browsing and iOS can throw on localStorage access
-function safeGetItem(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeSetItem(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Silent fail on Safari Private Browsing
-  }
-}
-
-function safeRemoveItem(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Silent fail on Safari Private Browsing
-  }
-}
 
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getAccessToken();
