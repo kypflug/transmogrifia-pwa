@@ -1,9 +1,9 @@
 /**
- * Touch gesture handling for mobile article navigation.
+ * Touch gesture handling for article navigation.
  *
- * - Horizontal swipe right → back to article list
- * - Overscroll up at top of article → previous article
- * - Overscroll down at bottom of article → next article
+ * - Horizontal swipe right → back to article list (mobile only)
+ * - Overscroll up at top of article → previous article (all viewports)
+ * - Overscroll down at bottom of article → next article (all viewports)
  *
  * Gestures are attached to both the reading pane (for the header bar) and
  * the iframe's contentDocument (for the article body), since touch events

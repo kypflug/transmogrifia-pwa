@@ -328,20 +328,24 @@ async function openArticle(id: string): Promise<void> {
 
       fixAnchorLinks(frame);
 
-      // Mobile gestures — attach to the settled contentDocument
+      // Gestures — attach to the settled contentDocument
+      destroyGestures();
+
+      // Back swipe only on narrow viewports (single-pane mode)
       if (window.matchMedia('(max-width: 767px)').matches) {
-        destroyGestures();
         const readingPane = document.querySelector('.reading-pane') as HTMLElement;
         if (readingPane) {
           initBackSwipe(readingPane, frame, () => goBack());
         }
-        initOverscrollNav(frame, (dir) => {
-          const filtered = getFilteredArticles();
-          const idx = filtered.findIndex(a => a.id === id);
-          const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
-          if (target) openArticle(target.id);
-        });
       }
+
+      // Overscroll prev/next works on all viewports
+      initOverscrollNav(frame, (dir) => {
+        const filtered = getFilteredArticles();
+        const idx = filtered.findIndex(a => a.id === id);
+        const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
+        if (target) openArticle(target.id);
+      });
     }, 0);
   };
 

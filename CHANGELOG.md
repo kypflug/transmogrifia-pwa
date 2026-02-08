@@ -4,6 +4,22 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.7] — 2026-02-08
+
+### Changed
+
+- **Dependency upgrades** — Updated `@azure/msal-browser` 3.30→5.1, `vite` 6.4→7.3, `vite-plugin-pwa` 0.21→1.2; removed deprecated `storeAuthStateInCookie` cache option (IE11 legacy)
+
+---
+
+## [0.10.6] — 2026-02-08
+
+### Changed
+
+- **Overscroll prev/next on all viewports** — Swipe-to-navigate between articles now works on wide (two-pane) viewports, not just narrow/mobile screens; back swipe remains mobile-only
+
+---
+
 ## [0.10.5] — 2026-02-08
 
 ### Fixed
