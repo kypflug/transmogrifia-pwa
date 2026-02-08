@@ -6,6 +6,7 @@
   background: var(--edge-surface);
   overflow: hidden;
   position: relative;
+  touch-action: pan-y pinch-zoom;
 }
 
 /* ===== Placeholder ===== */
@@ -162,6 +163,7 @@
   width: 100%;
   border: none;
   background: #fff;
+  touch-action: pan-y pinch-zoom;
 }
 
 [data-theme="dark"] .content-frame {

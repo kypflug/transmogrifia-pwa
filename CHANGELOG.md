@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.8] — 2026-02-08
+
+### Fixed
+
+- **iOS Safari gesture support** — Added `touch-action: pan-y pinch-zoom` to reading pane, content frame, and injected iframe styles so WebKit doesn't pre-empt horizontal swipes; injected `overscroll-behavior: none` into iframe content to suppress rubber-band bounce at scroll boundaries; switched iframe event target from `Document` to `documentElement` for reliable touch dispatch on WebKit; replaced `setTimeout(0)` with `requestAnimationFrame` retry loop for robust `contentDocument` access after `srcdoc` load
+- **Back swipe after resize** — Back-swipe gesture now works immediately when resizing from a wide viewport to narrow, without requiring a page refresh; viewport-width check moved from init time to swipe time
+
+---
+
 ## [0.10.7] — 2026-02-08
 
 ### Changed

@@ -13,6 +13,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 body {

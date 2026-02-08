@@ -308,7 +308,12 @@ async function openArticle(id: string): Promise<void> {
   // Inject styles: hide extension UI + lock horizontal scroll
   const injectedStyles = `<style>
     .remix-save-fab { display: none !important; }
-    html, body { max-width: 100vw !important; overflow-x: hidden !important; }
+    html, body {
+      max-width: 100vw !important;
+      overflow-x: hidden !important;
+      touch-action: pan-y pinch-zoom;
+      overscroll-behavior: none;
+    }
     img, video, iframe, embed, object, table, pre, code, svg {
       max-width: 100% !important;
       overflow-x: auto !important;
@@ -320,23 +325,26 @@ async function openArticle(id: string): Promise<void> {
   // Set onload BEFORE srcdoc — srcdoc iframes can fire load for about:blank
   // before the real content; attaching handlers afterward risks missing it
   frame.onload = () => {
-    // Defer to next tick so the contentDocument is fully settled (iOS Safari
-    // can replace the Document object between the load event and microtask)
-    setTimeout(() => {
+    // iOS Safari can replace the contentDocument after the load event;
+    // retry with rAF until the document is fully settled.
+    let attempts = 0;
+    function trySetup() {
       const doc = frame.contentDocument;
-      if (!doc || !doc.body) return;
+      if (!doc || !doc.body) {
+        if (++attempts < 10) requestAnimationFrame(trySetup);
+        return;
+      }
 
       fixAnchorLinks(frame);
 
       // Gestures — attach to the settled contentDocument
       destroyGestures();
 
-      // Back swipe only on narrow viewports (single-pane mode)
-      if (window.matchMedia('(max-width: 767px)').matches) {
-        const readingPane = document.querySelector('.reading-pane') as HTMLElement;
-        if (readingPane) {
-          initBackSwipe(readingPane, frame, () => goBack());
-        }
+      // Back swipe — always initialised; the handler itself checks viewport
+      // width at swipe time so resizing from wide → narrow works immediately.
+      const readingPane = document.querySelector('.reading-pane') as HTMLElement;
+      if (readingPane) {
+        initBackSwipe(readingPane, frame, () => goBack());
       }
 
       // Overscroll prev/next works on all viewports
@@ -346,7 +354,8 @@ async function openArticle(id: string): Promise<void> {
         const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
         if (target) openArticle(target.id);
       });
-    }, 0);
+    }
+    requestAnimationFrame(trySetup);
   };
 
   frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');

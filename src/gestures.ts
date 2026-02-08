@@ -76,7 +76,13 @@ export function initBackSwipe(
   let didTrigger = false;
   let decided = false;
 
+  const narrowQuery = window.matchMedia('(max-width: 767px)');
+
   function onTouchStart(e: TouchEvent) {
+    // Back swipe only applies in narrow (single-pane) mode;
+    // checked at swipe time so resizing the viewport takes effect immediately.
+    if (!narrowQuery.matches) return;
+
     const touch = e.touches[0];
     tracking = true;
     decided = false;
@@ -137,10 +143,10 @@ export function initBackSwipe(
   // Attach to the pane (header bar area)
   cleanupFns.push(attachTouchListeners(pane, handlers, false));
 
-  // Attach to iframe contentDocument
+  // Attach to iframe documentElement — more reliable than Document on iOS Safari
   const iframeDoc = getIframeDocument(frame);
   if (iframeDoc) {
-    cleanupFns.push(attachTouchListeners(iframeDoc, handlers, false));
+    cleanupFns.push(attachTouchListeners(iframeDoc.documentElement, handlers, false));
   }
 }
 
@@ -254,11 +260,12 @@ export function initOverscrollNav(
 
   const handlers = { onStart: onTouchStart, onMove: onTouchMove, onEnd: onTouchEnd };
 
-  // Attach to iframe contentDocument only — overscroll nav should only trigger
-  // from within the article content, not the header bar
+  // Attach to iframe documentElement only — overscroll nav should only trigger
+  // from within the article content, not the header bar.
+  // Using documentElement (not Document) for reliable iOS Safari event dispatch.
   const iframeDoc = getIframeDocument(frame);
   if (iframeDoc) {
-    cleanupFns.push(attachTouchListeners(iframeDoc, handlers));
+    cleanupFns.push(attachTouchListeners(iframeDoc.documentElement, handlers));
   }
 }
 
