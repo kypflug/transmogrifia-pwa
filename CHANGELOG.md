@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.2] — 2026-02-08
+
+### Added
+
+- **README.md** — Added project README with feature overview, setup instructions, tech stack, project structure, and link to companion Transmogrifier extension
+
+---
+
 ## [0.10.1] — 2026-02-08
 
 ### Fixed
