@@ -278,14 +278,28 @@ async function openArticle(id: string): Promise<void> {
 
   // Render in iframe
   const frame = document.getElementById('contentFrame') as HTMLIFrameElement;
-  // Hide any extension-specific UI in the article HTML
-  const fabHideStyle = '<style>.remix-save-fab { display: none !important; }</style>';
-  frame.srcdoc = html.replace('</head>', fabHideStyle + '</head>');
+  // Inject styles: hide extension UI + lock horizontal scroll
+  const injectedStyles = `<style>
+    .remix-save-fab { display: none !important; }
+    html, body { max-width: 100vw !important; overflow-x: hidden !important; }
+    img, video, iframe, embed, object, table, pre, code, svg {
+      max-width: 100% !important;
+      overflow-x: auto !important;
+      box-sizing: border-box !important;
+    }
+    pre { white-space: pre-wrap !important; word-break: break-word !important; }
+  </style>`;
+  frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
 
   frame.onload = () => {
     fixAnchorLinks(frame);
-    // Mobile gestures
+    // Mobile gestures — must init after iframe loads so contentDocument is available
     if (window.matchMedia('(max-width: 767px)').matches) {
+      destroyGestures();
+      const readingPane = document.querySelector('.reading-pane') as HTMLElement;
+      if (readingPane) {
+        initBackSwipe(readingPane, frame, () => goBack());
+      }
       initOverscrollNav(frame, (dir) => {
         const filtered = getFilteredArticles();
         const idx = filtered.findIndex(a => a.id === id);
@@ -299,15 +313,6 @@ async function openArticle(id: string): Promise<void> {
 
   // Mobile: show reading pane
   document.body.classList.add('mobile-reading');
-
-  // Mobile gestures: back swipe
-  if (window.matchMedia('(max-width: 767px)').matches) {
-    const readingPane = document.querySelector('.reading-pane') as HTMLElement;
-    if (readingPane) {
-      destroyGestures();
-      initBackSwipe(readingPane, () => goBack());
-    }
-  }
 }
 
 function goBack(): void {

@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.7] — 2026-02-07
+
+### Fixed
+
+- **Gesture navigation on article body** — Touch gestures now attach to the iframe's contentDocument so swipe-back and overscroll navigation work anywhere on the article, not just the title bar
+- **Article horizontal scroll** — Injected CSS into article iframe to lock `overflow-x`, constrain wide images/tables/code blocks to viewport width
+
+---
+
 ## [0.9.6] — 2026-02-07
 
 ### Added

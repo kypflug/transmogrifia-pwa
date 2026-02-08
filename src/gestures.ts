@@ -1,12 +1,15 @@
 /**
  * Touch gesture handling for mobile article navigation.
  *
- * - Left-edge swipe right → back to article list
+ * - Horizontal swipe right → back to article list
  * - Overscroll up at top of article → previous article
  * - Overscroll down at bottom of article → next article
+ *
+ * Gestures are attached to both the reading pane (for the header bar) and
+ * the iframe's contentDocument (for the article body), since touch events
+ * inside an iframe don't bubble to the parent.
  */
 
-const EDGE_ZONE = 24;            // px from left edge to start a back swipe
 const BACK_THRESHOLD = 100;      // px horizontal distance to trigger back
 const OVERSCROLL_THRESHOLD = 80; // px vertical overscroll to trigger nav
 const INDICATOR_MAX = 120;       // max indicator travel in px
@@ -18,10 +21,37 @@ let backIndicator: HTMLElement | null = null;
 let overscrollIndicator: HTMLElement | null = null;
 let cleanupFns: Array<() => void> = [];
 
-// ── Back swipe (left edge → right) ──────────────────────────────────────────
+/**
+ * Attach touch listeners to an EventTarget (HTMLElement or Document).
+ * Returns a cleanup function.
+ */
+function attachTouchListeners(
+  target: EventTarget,
+  handlers: {
+    onStart: (e: TouchEvent) => void;
+    onMove: (e: TouchEvent) => void;
+    onEnd: () => void;
+  },
+  movePassive: boolean = true,
+): () => void {
+  target.addEventListener('touchstart', handlers.onStart as EventListener, { passive: true });
+  target.addEventListener('touchmove', handlers.onMove as EventListener, { passive: movePassive });
+  target.addEventListener('touchend', handlers.onEnd as EventListener, { passive: true });
+  target.addEventListener('touchcancel', handlers.onEnd as EventListener, { passive: true });
+
+  return () => {
+    target.removeEventListener('touchstart', handlers.onStart as EventListener);
+    target.removeEventListener('touchmove', handlers.onMove as EventListener);
+    target.removeEventListener('touchend', handlers.onEnd as EventListener);
+    target.removeEventListener('touchcancel', handlers.onEnd as EventListener);
+  };
+}
+
+// ── Back swipe (horizontal right swipe) ─────────────────────────────────────
 
 export function initBackSwipe(
-  target: HTMLElement,
+  pane: HTMLElement,
+  frame: HTMLIFrameElement,
   onBack: BackCallback,
 ): void {
   let tracking = false;
@@ -29,17 +59,16 @@ export function initBackSwipe(
   let startY = 0;
   let currentX = 0;
   let didTrigger = false;
+  let decided = false;
 
   function onTouchStart(e: TouchEvent) {
     const touch = e.touches[0];
-    // Only start if touch begins near the left edge
-    if (touch.clientX > EDGE_ZONE) return;
     tracking = true;
+    decided = false;
     didTrigger = false;
     startX = touch.clientX;
     startY = touch.clientY;
     currentX = 0;
-    ensureBackIndicator();
   }
 
   function onTouchMove(e: TouchEvent) {
@@ -48,21 +77,29 @@ export function initBackSwipe(
     const dx = touch.clientX - startX;
     const dy = Math.abs(touch.clientY - startY);
 
-    // Cancel if swiping more vertically than horizontally
-    if (dy > Math.abs(dx) * 1.5 && dx < 30) {
-      tracking = false;
-      hideBackIndicator();
-      return;
+    // Decide once: is this a horizontal or vertical gesture?
+    if (!decided && (Math.abs(dx) > 10 || dy > 10)) {
+      decided = true;
+      if (dy > Math.abs(dx)) {
+        // Vertical — not a back swipe
+        tracking = false;
+        hideBackIndicator();
+        return;
+      }
+      ensureBackIndicator();
     }
 
-    if (dx < 0) {
-      // Swiping left — ignore
+    if (!decided) return;
+
+    if (dx <= 0) {
       hideBackIndicator();
       return;
     }
 
     currentX = dx;
-    e.preventDefault(); // Prevent scrolling while swiping back
+    // Only preventDefault if we own the gesture — in the parent pane we can,
+    // in the iframe doc we also can to stop its scrolling.
+    try { e.preventDefault(); } catch { /* passive listener in iframe */ }
 
     const progress = Math.min(dx / BACK_THRESHOLD, 1);
     updateBackIndicator(progress);
@@ -80,17 +117,18 @@ export function initBackSwipe(
     hideBackIndicator();
   }
 
-  target.addEventListener('touchstart', onTouchStart, { passive: true });
-  target.addEventListener('touchmove', onTouchMove, { passive: false });
-  target.addEventListener('touchend', onTouchEnd, { passive: true });
-  target.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  const handlers = { onStart: onTouchStart, onMove: onTouchMove, onEnd: onTouchEnd };
 
-  cleanupFns.push(() => {
-    target.removeEventListener('touchstart', onTouchStart);
-    target.removeEventListener('touchmove', onTouchMove);
-    target.removeEventListener('touchend', onTouchEnd);
-    target.removeEventListener('touchcancel', onTouchEnd);
-  });
+  // Attach to the pane (header bar area)
+  cleanupFns.push(attachTouchListeners(pane, handlers, false));
+
+  // Attach to iframe contentDocument
+  try {
+    const doc = frame.contentDocument;
+    if (doc) {
+      cleanupFns.push(attachTouchListeners(doc, handlers, false));
+    }
+  } catch { /* cross-origin */ }
 }
 
 // ── Overscroll prev/next ────────────────────────────────────────────────────
@@ -104,11 +142,6 @@ export function initOverscrollNav(
   let direction: 'prev' | 'next' | null = null;
   let overscroll = 0;
   let didTrigger = false;
-
-  // We listen on the iframe's contentDocument for scroll position,
-  // but on the reading pane for touch events (since iframe content may not
-  // propagate touch events to the parent).
-  const pane = (frame.closest('.reading-pane') || frame.parentElement!) as HTMLElement;
 
   function getScrollInfo(): { atTop: boolean; atBottom: boolean } {
     try {
@@ -144,7 +177,6 @@ export function initOverscrollNav(
     const dy = e.touches[0].clientY - startY;
     const { atTop, atBottom } = getScrollInfo();
 
-    // Determine direction
     if (dy > 10 && atTop) {
       direction = 'prev';
       overscroll = dy;
@@ -174,17 +206,19 @@ export function initOverscrollNav(
     hideOverscrollIndicator();
   }
 
-  pane.addEventListener('touchstart', onTouchStart, { passive: true });
-  pane.addEventListener('touchmove', onTouchMove, { passive: true });
-  pane.addEventListener('touchend', onTouchEnd, { passive: true });
-  pane.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  const handlers = { onStart: onTouchStart, onMove: onTouchMove, onEnd: onTouchEnd };
 
-  cleanupFns.push(() => {
-    pane.removeEventListener('touchstart', onTouchStart);
-    pane.removeEventListener('touchmove', onTouchMove);
-    pane.removeEventListener('touchend', onTouchEnd);
-    pane.removeEventListener('touchcancel', onTouchEnd);
-  });
+  // Attach to iframe contentDocument directly
+  try {
+    const doc = frame.contentDocument;
+    if (doc) {
+      cleanupFns.push(attachTouchListeners(doc, handlers));
+    }
+  } catch { /* cross-origin */ }
+
+  // Also attach to the pane (header bar)
+  const pane = (frame.closest('.reading-pane') || frame.parentElement!) as HTMLElement;
+  cleanupFns.push(attachTouchListeners(pane, handlers));
 }
 
 // ── Cleanup ─────────────────────────────────────────────────────────────────
