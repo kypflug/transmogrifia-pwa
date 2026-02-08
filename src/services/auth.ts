@@ -30,7 +30,15 @@ export async function initAuth(): Promise<PublicClientApplication> {
   await msalInstance.initialize();
 
   // Handle redirect promise (for loginRedirect flow)
-  await msalInstance.handleRedirectPromise();
+  // On Safari/iOS, this can throw errors if there's a stale redirect state,
+  // localStorage issues, or cookie restrictions. We catch and log the error
+  // but allow initialization to continue so the app can still load.
+  try {
+    await msalInstance.handleRedirectPromise();
+  } catch (err) {
+    console.warn('handleRedirectPromise failed (non-fatal):', err);
+    // If this fails, the user might need to sign in again, but the app should still load
+  }
 
   return msalInstance;
 }

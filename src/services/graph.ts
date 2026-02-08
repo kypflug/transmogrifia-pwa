@@ -5,6 +5,31 @@ const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const APP_FOLDER = 'articles';
 const DELTA_TOKEN_KEY = 'transmogrifia_delta_token';
 
+// Safari Private Browsing and iOS can throw on localStorage access
+function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Silent fail on Safari Private Browsing
+  }
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Silent fail on Safari Private Browsing
+  }
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   return { Authorization: `Bearer ${token}` };
@@ -25,7 +50,7 @@ export interface DeltaSyncResult {
  */
 export async function syncArticles(): Promise<DeltaSyncResult> {
   const headers = await authHeaders();
-  const savedToken = localStorage.getItem(DELTA_TOKEN_KEY);
+  const savedToken = safeGetItem(DELTA_TOKEN_KEY);
 
   // Use saved delta link if available, otherwise start fresh
   let url: string | null = savedToken
@@ -42,7 +67,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
       if (!res.ok) {
         if (res.status === 404 || res.status === 410) {
           // Folder doesn't exist yet or delta token expired — fall back to full list
-          localStorage.removeItem(DELTA_TOKEN_KEY);
+          safeRemoveItem(DELTA_TOKEN_KEY);
           const allMeta = await listArticles();
           return { upserted: allMeta, deleted: [] };
         }
@@ -92,7 +117,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
       const nextLink = data['@odata.nextLink'] as string | undefined;
 
       if (deltaLink) {
-        localStorage.setItem(DELTA_TOKEN_KEY, deltaLink);
+        safeSetItem(DELTA_TOKEN_KEY, deltaLink);
         url = null; // done
       } else {
         url = nextLink || null;
@@ -101,7 +126,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   } catch (err) {
     // If the saved token caused an error, clear it and throw
     if (savedToken) {
-      localStorage.removeItem(DELTA_TOKEN_KEY);
+      safeRemoveItem(DELTA_TOKEN_KEY);
     }
     throw err;
   }
@@ -114,7 +139,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
 
 /** Clear the saved delta token (used when signing out / clearing cache) */
 export function clearDeltaToken(): void {
-  localStorage.removeItem(DELTA_TOKEN_KEY);
+  safeRemoveItem(DELTA_TOKEN_KEY);
 }
 
 /**
