@@ -24,7 +24,7 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
     `?$select=name&$top=200`;
 
   while (url) {
-    const res = await fetch(url, { headers });
+    const res: Response = await fetch(url, { headers });
 
     if (!res.ok) {
       if (res.status === 404) return []; // no articles folder yet
@@ -32,9 +32,10 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
       throw new Error(`List articles failed: ${res.status} ${body}`);
     }
 
-    const data = await res.json();
+    const data: Record<string, unknown> = await res.json();
 
-    for (const item of data.value || []) {
+    const items = (data.value as Array<{ name: string }>) || [];
+    for (const item of items) {
       const name: string = item.name;
       if (!name.endsWith('.json')) continue;
       const id = name.replace('.json', '');
@@ -46,7 +47,7 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
       }
     }
 
-    url = data['@odata.nextLink'] || null;
+    url = (data['@odata.nextLink'] as string) || null;
   }
 
   return metas;

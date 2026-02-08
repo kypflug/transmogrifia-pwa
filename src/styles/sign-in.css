@@ -4,28 +4,81 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: var(--edge-surface-sunken);
+  position: relative;
+  overflow: hidden;
 }
 
+/* ===== Hero Background ===== */
+.sign-in-hero {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.sign-in-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.sign-in-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.45) 0%,
+    rgba(0, 0, 0, 0.25) 50%,
+    rgba(0, 0, 0, 0.50) 100%
+  );
+  backdrop-filter: blur(1px);
+}
+
+[data-theme="dark"] .sign-in-hero-overlay {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.65) 0%,
+    rgba(0, 0, 0, 0.45) 50%,
+    rgba(0, 0, 0, 0.70) 100%
+  );
+}
+
+/* ===== Sign-In Card ===== */
 .sign-in-card {
-  background: var(--edge-surface-raised);
-  border: 1px solid var(--edge-border);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--edge-radius-lg);
-  box-shadow: var(--edge-shadow-md);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(16px);
   padding: 48px 40px;
   text-align: center;
   max-width: 400px;
   width: 90%;
 }
 
+[data-theme="dark"] .sign-in-card {
+  background: rgba(43, 43, 48, 0.88);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="sepia"] .sign-in-card {
+  background: rgba(251, 246, 235, 0.92);
+  border-color: rgba(212, 201, 168, 0.5);
+}
+
 .sign-in-brand {
   margin-bottom: 12px;
 }
 
-.brand-icon {
-  font-size: 48px;
+.brand-icon-img {
   display: block;
-  margin-bottom: 8px;
+  margin: 0 auto 12px;
+  border-radius: var(--edge-radius);
 }
 
 .sign-in-brand h1 {
@@ -53,16 +106,22 @@
   border: none;
   border-radius: var(--edge-radius);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s;
 }
 
 .sign-in-btn:hover {
   background: var(--edge-blue-hover);
+  transform: translateY(-1px);
+}
+
+.sign-in-btn:active {
+  transform: translateY(0);
 }
 
 .sign-in-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 .sign-in-btn svg {
@@ -77,4 +136,16 @@
 
 .sign-in-footnote strong {
   color: var(--edge-text-secondary);
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 480px) {
+  .sign-in-card {
+    padding: 36px 24px;
+    margin: 0 16px;
+  }
+
+  .sign-in-brand h1 {
+    font-size: 22px;
+  }
 }

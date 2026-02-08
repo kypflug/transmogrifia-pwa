@@ -43,7 +43,7 @@ export function renderLibrary(root: HTMLElement): void {
       <aside class="sidebar" style="width: ${getSidebarWidth()}px">
         <div class="sidebar-header">
           <div class="sidebar-brand">
-            <span class="brand-icon-sm">📦</span>
+            <img src="/icons/icon-32.png" alt="" class="brand-icon-sm" width="20" height="20">
             <span class="brand-text">Transmogrifia</span>
           </div>
           <div class="sidebar-header-actions">

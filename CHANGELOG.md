@@ -4,6 +4,32 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.0] — 2026-02-07
+
+### Added
+
+- **AI-generated hero image** — Watercolor Library of Alexandria illustration as sign-in background (AVIF/WebP/JPEG with responsive variants)
+- **AI-generated app icon** — Classical watercolor scroll/book icon replacing emoji placeholder
+- **Image processing pipeline** — Sharp-based scripts for generating optimized icons and hero images (`npm run img:generate`, `npm run img:process`)
+- **Proper raster icons** — Full icon set (16–512px PNGs, Apple Touch Icon, maskable icon) replacing SVG placeholders
+- **`.env.example`** — Template for Azure OpenAI image generation credentials
+- **Copilot instructions** — Added `.github/workflows/copilot-instructions.md` with project conventions, design system reference, and Azure OpenAI API patterns
+- **Dev dependencies** — Added `sharp` and `@types/node` for image processing; added `tsx` script aliases in `package.json`
+
+### Changed
+
+- **App icon padding** — Cropped ~75% of whitespace from the icon source image for a tighter, more prominent icon at all sizes
+- **Sign-in screen redesign** — Full-bleed hero background with frosted-glass card overlay, responsive across themes and mobile
+- **Library brand icon** — Replaced emoji `📦` with generated watercolor `<img>` icon in sidebar header
+- **Web app manifest** — Added `orientation`, `categories`, maskable icon, proper icon size ladder, AVIF/WebP background color
+- **Favicon** — Embedded PNG-in-SVG favicon + 32px PNG fallback replacing plain emoji SVG
+- **index.html** — Added Apple mobile web app meta tags, preload for hero image, favicon-32 fallback link
+- **Auth resilience** — Enabled `storeAuthStateInCookie` for Safari/iOS; added redirect fallback when `acquireTokenPopup` is blocked
+- **Graph API type safety** — Explicit types on `fetch` responses and `data.value` iteration to eliminate implicit `any`
+- **.gitignore** — Exclude raw AI-generated images (`public/images/*-raw.png`) from version control
+
+---
+
 ## [0.8.0] — 2026-02-07
 
 Initial release of the Library of Transmogrifia PWA.

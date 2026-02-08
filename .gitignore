@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.local
 .env
+
+# Raw AI-generated images (keep only processed versions)
+public/images/*-raw.png

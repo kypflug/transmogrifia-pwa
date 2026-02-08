@@ -17,7 +17,7 @@ const msalConfig: Configuration = {
   },
   cache: {
     cacheLocation: 'localStorage',
-    storeAuthStateInCookie: false,
+    storeAuthStateInCookie: true,
   },
 };
 
@@ -78,10 +78,16 @@ export async function getAccessToken(): Promise<string> {
     return result.accessToken;
   } catch (err) {
     if (err instanceof InteractionRequiredAuthError) {
-      const result = await msal.acquireTokenPopup({
-        scopes: LOGIN_SCOPES,
-      });
-      return result.accessToken;
+      try {
+        const result = await msal.acquireTokenPopup({
+          scopes: LOGIN_SCOPES,
+        });
+        return result.accessToken;
+      } catch {
+        // Popup blocked (e.g. Safari/iOS) — fall back to redirect
+        await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
+        throw new Error('Redirecting for token…');
+      }
     }
     throw err;
   }

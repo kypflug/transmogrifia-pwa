@@ -6,9 +6,17 @@ export function renderSignIn(
 ): void {
   container.innerHTML = `
     <div class="sign-in-screen">
+      <div class="sign-in-hero">
+        <picture>
+          <source srcset="/images/hero.avif" type="image/avif">
+          <source srcset="/images/hero.webp" type="image/webp">
+          <img src="/images/hero.jpg" alt="Watercolor illustration of the Library of Alexandria" class="sign-in-hero-img" loading="eager">
+        </picture>
+        <div class="sign-in-hero-overlay"></div>
+      </div>
       <div class="sign-in-card">
         <div class="sign-in-brand">
-          <span class="brand-icon">📦</span>
+          <img src="/icons/icon-64.png" alt="" class="brand-icon-img" width="56" height="56">
           <h1>Library of<br>Transmogrifia</h1>
         </div>
         <p class="sign-in-tagline">Your transmogrified articles, anywhere.</p>
