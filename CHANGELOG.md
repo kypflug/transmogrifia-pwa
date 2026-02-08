@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.2] — 2026-02-07
+
+### Fixed
+
+- **X-Frame-Options blocking MSAL silent auth** — Changed `X-Frame-Options` from `DENY` to `SAMEORIGIN` so MSAL’s hidden iframe can redirect back to the app’s own origin during `acquireTokenSilent`, fixing article loading on the live site
+
+---
+
 ## [0.9.1] — 2026-02-07
 
 ### Fixed
