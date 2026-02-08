@@ -4,11 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [0.10.11] — 2026-02-08
 
-### Fixed
+### Added
 
-- **Safari/iOS initialization failure** — Fixed "Failed to initialize. Please reload." error on Safari iOS by adding error handling around `handleRedirectPromise()` in MSAL initialization; added safe localStorage wrappers to handle Safari Private Browsing mode gracefully; enhanced boot error screen with specific error messages and reload button
+- **Reader floating action buttons** — Added a pill-shaped FAB row at the bottom-right of the reader viewport with Back, Previous (↑), and Next (↓) buttons for quick article navigation; prev/next buttons disable at list boundaries
+
+### Removed
+
+- **iOS Safari workarounds** — Reverted redirect auth flow, iframe document replacement monitoring, and generation-counter iframe readiness strategy introduced in 0.10.10; the workarounds caused unintended back-navigation to the sign-in flow. Retained the iOS auto-zoom fix (16px input font-size via `@supports`)
 
 ---
 

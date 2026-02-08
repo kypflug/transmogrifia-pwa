@@ -119,6 +119,12 @@ export function renderLibrary(root: HTMLElement): void {
           <p id="readerErrorMsg"></p>
           <button class="retry-btn" id="retryBtn">Retry</button>
         </div>
+        <div class="reader-fab" id="readerFab">
+          <button class="fab-btn" id="fabBack" aria-label="Back to list" title="Back to list">←</button>
+          <div class="fab-sep"></div>
+          <button class="fab-btn" id="fabPrev" aria-label="Previous article" title="Previous article">↑</button>
+          <button class="fab-btn" id="fabNext" aria-label="Next article" title="Next article">↓</button>
+        </div>
       </main>
     </div>
   `;
@@ -139,6 +145,7 @@ async function initLibrary(): Promise<void> {
   setupOfflineHandling();
   populateRecipeFilters();
   setSelectValues();
+  setupFab();
 
   // Load articles
   await loadArticles();
@@ -362,6 +369,9 @@ async function openArticle(id: string): Promise<void> {
 
   showReaderState('content');
 
+  // Update FAB prev/next enabled state
+  updateFabState(id);
+
   // Mobile: show reading pane
   document.body.classList.add('mobile-reading');
 }
@@ -372,6 +382,37 @@ function goBack(): void {
   currentId = null;
   renderList();
   showReaderState('placeholder');
+}
+
+function updateFabState(id: string): void {
+  const filtered = getFilteredArticles();
+  const idx = filtered.findIndex(a => a.id === id);
+  const prevBtn = document.getElementById('fabPrev') as HTMLButtonElement | null;
+  const nextBtn = document.getElementById('fabNext') as HTMLButtonElement | null;
+  if (prevBtn) prevBtn.disabled = idx <= 0;
+  if (nextBtn) nextBtn.disabled = idx < 0 || idx >= filtered.length - 1;
+}
+
+function setupFab(): void {
+  const fabBack = document.getElementById('fabBack');
+  const fabPrev = document.getElementById('fabPrev');
+  const fabNext = document.getElementById('fabNext');
+
+  fabBack?.addEventListener('click', () => goBack());
+
+  fabPrev?.addEventListener('click', () => {
+    if (!currentId) return;
+    const filtered = getFilteredArticles();
+    const idx = filtered.findIndex(a => a.id === currentId);
+    if (idx > 0) openArticle(filtered[idx - 1].id);
+  });
+
+  fabNext?.addEventListener('click', () => {
+    if (!currentId) return;
+    const filtered = getFilteredArticles();
+    const idx = filtered.findIndex(a => a.id === currentId);
+    if (idx >= 0 && idx < filtered.length - 1) openArticle(filtered[idx + 1].id);
+  });
 }
 
 function setupArticleActions(meta: OneDriveArticleMeta): void {

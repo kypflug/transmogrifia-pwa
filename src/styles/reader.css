@@ -181,6 +181,62 @@
   height: 100%;
 }
 
+/* ===== Floating Action Buttons ===== */
+.reader-fab {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--edge-surface-raised);
+  border: 1px solid var(--edge-border);
+  border-radius: 20px;
+  box-shadow: var(--edge-shadow-md);
+  z-index: 100;
+  padding: 2px;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.reader-fab:hover {
+  opacity: 1;
+}
+
+.fab-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--edge-text-primary);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+
+.fab-btn:hover:not(:disabled) {
+  background: var(--edge-surface-sunken);
+}
+
+.fab-btn:disabled {
+  color: var(--edge-text-tertiary);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.fab-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--edge-border-subtle);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
 /* ===== Gesture Indicators ===== */
 .gesture-back-indicator {
   position: fixed;
