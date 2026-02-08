@@ -108,4 +108,4 @@ The app is configured for [Azure Static Web Apps](https://azure.microsoft.com/pr
 
 ## License
 
-This project is not currently licensed for redistribution. All rights reserved.
+[MIT](LICENSE)
