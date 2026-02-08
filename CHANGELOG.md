@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.9.1] — 2026-02-07
+
+### Fixed
+
+- **CSP blocking auth on live site** — Added `https://login.microsoftonline.com` and `https://login.live.com` to `frame-src` and `connect-src` in `staticwebapp.config.json`, fixing silent token acquisition (and therefore article loading) on the deployed site
+
+---
+
 ## [0.9.0] — 2026-02-07
 
 ### Added

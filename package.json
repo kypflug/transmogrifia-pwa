@@ -1,6 +1,6 @@
 {
   "name": "transmogrifia-pwa",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Library of Transmogrifia — Read your transmogrified articles anywhere",
   "type": "module",
   "scripts": {
