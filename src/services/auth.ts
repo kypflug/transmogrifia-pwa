@@ -75,6 +75,9 @@ export async function getAccessToken(): Promise<string> {
       scopes: LOGIN_SCOPES,
       account,
     });
+    if (!result.accessToken) {
+      throw new InteractionRequiredAuthError('empty_token', 'Silent token acquisition returned empty access token');
+    }
     return result.accessToken;
   } catch (err) {
     if (err instanceof InteractionRequiredAuthError) {
@@ -82,6 +85,9 @@ export async function getAccessToken(): Promise<string> {
         const result = await msal.acquireTokenPopup({
           scopes: LOGIN_SCOPES,
         });
+        if (!result.accessToken) {
+          throw new Error('Token acquisition returned empty access token');
+        }
         return result.accessToken;
       } catch {
         // Popup blocked (e.g. Safari/iOS) — fall back to redirect

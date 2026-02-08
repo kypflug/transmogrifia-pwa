@@ -75,7 +75,16 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
         if (!name.endsWith('.json')) continue;
         const id = name.replace('.json', '');
         try {
-          const meta = await downloadMeta(id, headers);
+          // Use @microsoft.graph.downloadUrl if available (avoids extra API call)
+          const directUrl = item['@microsoft.graph.downloadUrl'] as string | undefined;
+          let meta: OneDriveArticleMeta;
+          if (directUrl) {
+            const dlRes = await fetch(directUrl);
+            if (!dlRes.ok) throw new Error(`Direct download failed: ${dlRes.status}`);
+            meta = await dlRes.json();
+          } else {
+            meta = await downloadMeta(id, headers);
+          }
           upserted.push(meta);
         } catch (err) {
           console.warn('Skipping unreadable metadata:', name, err);

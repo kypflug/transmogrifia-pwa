@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.1] — 2026-02-08
+
+### Fixed
+
+- **Empty access token guard** — `getAccessToken()` now validates that `acquireTokenSilent` and `acquireTokenPopup` return a non-empty access token; throws `InteractionRequiredAuthError` to trigger re-auth if the token is empty
+- **Delta sync optimization** — `syncArticles()` now uses `@microsoft.graph.downloadUrl` from delta response items when available, avoiding an extra Graph API call per metadata file (matching extension fix)
+
+---
+
 ## [0.10.0] — 2026-02-08
 
 ### Added
