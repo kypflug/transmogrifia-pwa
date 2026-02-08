@@ -5,3 +5,6 @@ dist/
 
 # Raw AI-generated images (keep only processed versions)
 public/images/*-raw.png
+
+# Archive (specs, source assets)
+archive/
