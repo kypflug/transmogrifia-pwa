@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Safari/iOS initialization failure** — Fixed "Failed to initialize. Please reload." error on Safari iOS by adding error handling around `handleRedirectPromise()` in MSAL initialization; added safe localStorage wrappers to handle Safari Private Browsing mode gracefully; enhanced boot error screen with specific error messages and reload button
+
+---
+
 ## [0.10.8] — 2026-02-08
 
 ### Fixed
