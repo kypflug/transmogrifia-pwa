@@ -2,6 +2,7 @@ import { initAuth, isSignedIn } from './services/auth';
 import { renderSignIn } from './screens/sign-in';
 import { renderLibrary } from './screens/library';
 import { applyTheme } from './theme';
+import { escapeHtml } from './utils/storage';
 
 const app = document.getElementById('app')!;
 
@@ -45,10 +46,11 @@ boot().catch(err => {
     }
   }
   
+  // Sanitize error messages before inserting into HTML
   app.innerHTML = `
     <div class="boot-error-screen">
-      <p class="boot-error-title">⚠️ ${errorMessage}</p>
-      ${errorDetails ? `<p class="boot-error-details">${errorDetails}</p>` : ''}
+      <p class="boot-error-title">⚠️ ${escapeHtml(errorMessage)}</p>
+      ${errorDetails ? `<p class="boot-error-details">${escapeHtml(errorDetails)}</p>` : ''}
       <button class="boot-error-reload" id="bootErrorReload">Reload</button>
     </div>
   `;

@@ -26,3 +26,12 @@ export function safeRemoveItem(key: string): void {
     // Silent fail on Safari Private Browsing
   }
 }
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ */
+export function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}

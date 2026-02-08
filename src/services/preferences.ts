@@ -33,8 +33,10 @@ export function setTheme(theme: Theme): void {
 }
 
 export function getSidebarWidth(): number {
-  const stored = safeGetItem(KEYS.sidebarWidth) || '340';
-  return parseInt(stored, 10);
+  const stored = safeGetItem(KEYS.sidebarWidth);
+  if (!stored || stored === '') return 340;
+  const parsed = parseInt(stored, 10);
+  return isNaN(parsed) ? 340 : parsed;
 }
 
 export function setSidebarWidth(width: number): void {
