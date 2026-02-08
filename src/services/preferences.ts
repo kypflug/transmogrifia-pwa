@@ -1,4 +1,5 @@
 import type { SortOrder, FilterMode, Theme } from '../types';
+import { safeGetItem, safeSetItem } from '../utils/storage';
 
 const KEYS = {
   sort: 'transmogrifia-sort',
@@ -8,34 +9,36 @@ const KEYS = {
 } as const;
 
 export function getSortOrder(): SortOrder {
-  return (localStorage.getItem(KEYS.sort) as SortOrder) || 'newest';
+  return (safeGetItem(KEYS.sort) || 'newest') as SortOrder;
 }
 
 export function setSortOrder(order: SortOrder): void {
-  localStorage.setItem(KEYS.sort, order);
+  safeSetItem(KEYS.sort, order);
 }
 
 export function getFilterMode(): FilterMode {
-  return (localStorage.getItem(KEYS.filter) as FilterMode) || 'all';
+  return (safeGetItem(KEYS.filter) || 'all') as FilterMode;
 }
 
 export function setFilterMode(mode: FilterMode): void {
-  localStorage.setItem(KEYS.filter, mode);
+  safeSetItem(KEYS.filter, mode);
 }
 
 export function getTheme(): Theme {
-  return (localStorage.getItem(KEYS.theme) as Theme) || 'system';
+  return (safeGetItem(KEYS.theme) || 'system') as Theme;
 }
 
 export function setTheme(theme: Theme): void {
-  localStorage.setItem(KEYS.theme, theme);
+  safeSetItem(KEYS.theme, theme);
 }
 
 export function getSidebarWidth(): number {
-  const stored = localStorage.getItem(KEYS.sidebarWidth);
-  return stored ? parseInt(stored, 10) : 340;
+  const stored = safeGetItem(KEYS.sidebarWidth);
+  if (!stored || stored === '') return 340;
+  const parsed = parseInt(stored, 10);
+  return isNaN(parsed) ? 340 : parsed;
 }
 
 export function setSidebarWidth(width: number): void {
-  localStorage.setItem(KEYS.sidebarWidth, String(width));
+  safeSetItem(KEYS.sidebarWidth, String(width));
 }
