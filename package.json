@@ -1,0 +1,19 @@
+{
+  "name": "transmogrifia-pwa",
+  "version": "1.0.0",
+  "description": "Library of Transmogrifia — Read your transmogrified articles anywhere",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vite": "^6.1.0",
+    "vite-plugin-pwa": "^0.21.0"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^3.27.0"
+  }
+}

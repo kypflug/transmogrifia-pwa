@@ -1,0 +1,222 @@
+/* ===== Reading Pane ===== */
+.reading-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--edge-surface);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== Placeholder ===== */
+.reader-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--edge-text-tertiary);
+}
+
+.reader-placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.reader-placeholder p {
+  font-size: 15px;
+}
+
+/* ===== Loading ===== */
+.reader-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: var(--edge-text-secondary);
+}
+
+/* ===== Error ===== */
+.reader-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--edge-red);
+}
+
+.retry-btn {
+  padding: 8px 20px;
+  background: var(--edge-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--edge-radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.retry-btn:hover {
+  background: var(--edge-blue-hover);
+}
+
+/* ===== Article Header Bar ===== */
+.article-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--edge-border-subtle);
+  background: var(--edge-surface-raised);
+  flex-shrink: 0;
+}
+
+.mobile-back {
+  display: none !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  color: var(--edge-text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: var(--edge-radius);
+}
+
+.mobile-back:hover {
+  background: var(--edge-surface-sunken);
+}
+
+.article-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.article-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--edge-text-primary);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.article-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+  flex-wrap: wrap;
+}
+
+.article-header-sep {
+  color: var(--edge-text-tertiary);
+}
+
+.article-header-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  background: var(--edge-surface-raised);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.action-btn:hover {
+  background: var(--edge-surface-sunken);
+  border-color: var(--edge-text-tertiary);
+}
+
+.fav-btn.active {
+  color: #F2A900;
+  border-color: #F2A900;
+}
+
+/* ===== Content Iframe ===== */
+.content-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+[data-theme="dark"] .content-frame {
+  background: #1B1B1F;
+}
+
+[data-theme="sepia"] .content-frame {
+  background: #FBF6EB;
+}
+
+/* ===== Reader Content Wrapper ===== */
+.reader-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 767px) {
+  .library-layout {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    border-right: none;
+  }
+
+  .reading-pane {
+    position: absolute;
+    inset: 0;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 10;
+    background: var(--edge-surface);
+  }
+
+  body.mobile-reading .reading-pane {
+    transform: translateX(0);
+  }
+
+  .resize-handle {
+    display: none;
+  }
+
+  .mobile-back {
+    display: flex !important;
+  }
+}
+
+/* ===== Tablet ===== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .sidebar {
+    max-width: 320px !important;
+  }
+
+  .article-header-meta span:not(.article-header-sep) {
+    font-size: 11px;
+  }
+}

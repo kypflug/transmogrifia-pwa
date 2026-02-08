@@ -1,0 +1,350 @@
+/* ===== Library Layout ===== */
+.library-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 600px;
+  background: var(--edge-surface-raised);
+  border-right: 1px solid var(--edge-border);
+  overflow: hidden;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--edge-border-subtle);
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon-sm {
+  font-size: 20px;
+}
+
+.brand-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--edge-text-primary);
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===== User Menu ===== */
+.user-menu-wrapper {
+  position: relative;
+}
+
+.user-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--edge-blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+}
+
+.user-btn:hover {
+  opacity: 0.85;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: var(--edge-surface-raised);
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  box-shadow: var(--edge-shadow-md);
+  min-width: 200px;
+  z-index: 100;
+  padding: 8px 0;
+}
+
+.user-dropdown-name {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--edge-text-primary);
+}
+
+.user-dropdown-sep {
+  border: none;
+  border-top: 1px solid var(--edge-border-subtle);
+  margin: 4px 0;
+}
+
+.user-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: none;
+  border: none;
+  color: var(--edge-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.user-dropdown-item:hover {
+  background: var(--edge-surface-sunken);
+}
+
+/* ===== Search & Filters ===== */
+.sidebar-controls {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--edge-border-subtle);
+  flex-shrink: 0;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--edge-surface-sunken);
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  transition: border-color 0.15s;
+}
+
+.search-box:focus-within {
+  border-color: var(--edge-blue);
+}
+
+.search-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--edge-text-primary);
+  outline: none;
+  font-family: inherit;
+}
+
+.search-input::placeholder {
+  color: var(--edge-text-tertiary);
+}
+
+.search-clear {
+  background: none;
+  border: none;
+  color: var(--edge-text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.search-clear:hover {
+  color: var(--edge-text-primary);
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.filter-select,
+.sort-select {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--edge-text-primary);
+  background: var(--edge-surface-sunken);
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  cursor: pointer;
+  outline: none;
+}
+
+.filter-select:focus,
+.sort-select:focus {
+  border-color: var(--edge-blue);
+}
+
+/* ===== Article List ===== */
+.article-list-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.article-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.article-item:hover {
+  background: var(--edge-surface-sunken);
+}
+
+.article-item.active {
+  background: var(--edge-blue-muted);
+  border-left-color: var(--edge-blue);
+}
+
+.article-item:focus-visible {
+  outline: 2px solid var(--edge-blue);
+  outline-offset: -2px;
+}
+
+.article-item-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.fav-star {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--edge-text-tertiary);
+  line-height: 1.4;
+}
+
+.fav-star.active {
+  color: #F2A900;
+}
+
+.article-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--edge-text-primary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.article-item-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  padding-left: 20px;
+}
+
+.article-recipe {
+  font-size: 11px;
+  color: var(--edge-text-secondary);
+}
+
+.article-date {
+  font-size: 11px;
+  color: var(--edge-text-tertiary);
+}
+
+.cloud-badge {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--edge-text-secondary);
+}
+
+.empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--edge-text-tertiary);
+  margin-top: 4px;
+}
+
+/* ===== Skeleton Loading ===== */
+.skeleton-list {
+  padding: 4px 0;
+}
+
+.skeleton-item {
+  padding: 12px 16px;
+}
+
+.skeleton-line {
+  height: 12px;
+  background: var(--edge-border-subtle);
+  border-radius: 4px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-line.long {
+  width: 80%;
+  margin-bottom: 8px;
+}
+
+.skeleton-line.short {
+  width: 45%;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ===== Footer ===== */
+.sidebar-footer {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--edge-text-tertiary);
+  border-top: 1px solid var(--edge-border-subtle);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/* ===== Resize Handle ===== */
+.resize-handle {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.resize-handle:hover {
+  background: var(--edge-blue);
+}

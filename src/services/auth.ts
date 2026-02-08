@@ -1,0 +1,97 @@
+import {
+  PublicClientApplication,
+  type Configuration,
+  type AccountInfo,
+  type AuthenticationResult,
+  InteractionRequiredAuthError,
+} from '@azure/msal-browser';
+
+const CLIENT_ID = '4b54bcee-1c83-4f52-9faf-d0dfd89c5ac2';
+const REDIRECT_URI = window.location.origin + '/';
+
+const msalConfig: Configuration = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/consumers',
+    redirectUri: REDIRECT_URI,
+  },
+  cache: {
+    cacheLocation: 'localStorage',
+    storeAuthStateInCookie: false,
+  },
+};
+
+const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'];
+
+let msalInstance: PublicClientApplication | null = null;
+
+export async function initAuth(): Promise<PublicClientApplication> {
+  if (msalInstance) return msalInstance;
+  msalInstance = new PublicClientApplication(msalConfig);
+  await msalInstance.initialize();
+
+  // Handle redirect promise (for loginRedirect flow)
+  await msalInstance.handleRedirectPromise();
+
+  return msalInstance;
+}
+
+export function getAccount(): AccountInfo | null {
+  if (!msalInstance) return null;
+  const accounts = msalInstance.getAllAccounts();
+  return accounts.length > 0 ? accounts[0] : null;
+}
+
+export async function signIn(): Promise<AccountInfo> {
+  const msal = await initAuth();
+  try {
+    const result: AuthenticationResult = await msal.loginPopup({
+      scopes: LOGIN_SCOPES,
+      prompt: 'select_account',
+    });
+    return result.account!;
+  } catch {
+    // Fallback to redirect if popup is blocked
+    await msal.loginRedirect({ scopes: LOGIN_SCOPES });
+    throw new Error('Redirecting for login…');
+  }
+}
+
+export async function signOut(): Promise<void> {
+  const msal = await initAuth();
+  const account = getAccount();
+  if (account) {
+    await msal.logoutPopup({ account });
+  }
+}
+
+export async function getAccessToken(): Promise<string> {
+  const msal = await initAuth();
+  const account = getAccount();
+  if (!account) throw new Error('Not signed in');
+
+  try {
+    const result = await msal.acquireTokenSilent({
+      scopes: LOGIN_SCOPES,
+      account,
+    });
+    return result.accessToken;
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      const result = await msal.acquireTokenPopup({
+        scopes: LOGIN_SCOPES,
+      });
+      return result.accessToken;
+    }
+    throw err;
+  }
+}
+
+export function isSignedIn(): boolean {
+  return getAccount() !== null;
+}
+
+export function getUserDisplayName(): string {
+  const account = getAccount();
+  return account?.name || account?.username || '';
+}
