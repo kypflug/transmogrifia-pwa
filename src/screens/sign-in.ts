@@ -41,8 +41,14 @@ export function renderSignIn(
     btn.disabled = true;
     btn.textContent = 'Signing in…';
     try {
-      await signIn();
-      onSuccess();
+      const account = await signIn();
+      // signIn() returns null when it triggers a redirect (mobile flow).
+      // In that case the page navigates away — don't call onSuccess().
+      if (account) {
+        onSuccess();
+      }
+      // If account is null and we're still here, the redirect is in progress.
+      // The button stays disabled to prevent double-clicks.
     } catch (err) {
       console.error('Sign-in failed:', err);
       btn.disabled = false;

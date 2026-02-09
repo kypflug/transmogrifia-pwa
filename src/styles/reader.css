@@ -191,10 +191,10 @@
   gap: 0;
   background: var(--edge-surface-raised);
   border: 1px solid var(--edge-border);
-  border-radius: 20px;
+  border-radius: 22px;
   box-shadow: var(--edge-shadow-md);
   z-index: 100;
-  padding: 2px;
+  padding: 3px;
   opacity: 0.85;
   transition: opacity 0.15s;
 }
@@ -204,8 +204,8 @@
 }
 
 .fab-btn {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +214,7 @@
   background: none;
   color: var(--edge-text-primary);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   transition: background 0.1s, color 0.1s;
 }
@@ -338,6 +338,12 @@
 
   .mobile-back {
     display: flex !important;
+  }
+
+  .reader-fab {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 

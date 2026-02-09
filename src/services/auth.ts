@@ -24,22 +24,61 @@ const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'
 
 let msalInstance: PublicClientApplication | null = null;
 
-export async function initAuth(): Promise<PublicClientApplication> {
-  if (msalInstance) return msalInstance;
+/**
+ * Initialise MSAL and process any redirect response.
+ *
+ * Returns the AuthenticationResult from `handleRedirectPromise()` if the page
+ * is loading after a redirect login — callers (main.ts) should check this to
+ * know whether the user just signed in via redirect.
+ */
+export async function initAuth(): Promise<AuthenticationResult | null> {
+  if (msalInstance) {
+    // Already initialised — no redirect response to process on subsequent calls
+    return null;
+  }
+
   msalInstance = new PublicClientApplication(msalConfig);
   await msalInstance.initialize();
 
-  // Handle redirect promise (for loginRedirect flow)
-  // On Safari/iOS, this can throw errors if there's a stale redirect state,
-  // localStorage issues, or cookie restrictions. We catch and log the error
-  // but allow initialization to continue so the app can still load.
+  // handleRedirectPromise() MUST be called on every page load.
+  // It returns non-null when the page is loading after a loginRedirect / acquireTokenRedirect.
   try {
-    await msalInstance.handleRedirectPromise();
+    const response = await msalInstance.handleRedirectPromise();
+    return response;
   } catch (err) {
     console.warn('handleRedirectPromise failed (non-fatal):', err);
-    // If this fails, the user might need to sign in again, but the app should still load
+    // Clear any stale interaction state that could block future sign-in attempts
+    cleanUpStaleState();
+    return null;
   }
+}
 
+/**
+ * Remove stale MSAL interaction-in-progress keys from localStorage.
+ * Failed redirects or interrupted popup flows can leave these behind,
+ * causing subsequent sign-in attempts to fail with interaction_in_progress.
+ */
+function cleanUpStaleState(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.includes('interaction.status') || key.includes('request.params'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    if (keysToRemove.length > 0) {
+      console.debug('Cleared stale MSAL state:', keysToRemove);
+    }
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
+/** Get the MSAL instance, assuming initAuth() has been called. */
+function getMsal(): PublicClientApplication {
+  if (!msalInstance) throw new Error('MSAL not initialised — call initAuth() first');
   return msalInstance;
 }
 
@@ -49,31 +88,42 @@ export function getAccount(): AccountInfo | null {
   return accounts.length > 0 ? accounts[0] : null;
 }
 
-export async function signIn(): Promise<AccountInfo> {
-  const msal = await initAuth();
-  try {
-    const result: AuthenticationResult = await msal.loginPopup({
-      scopes: LOGIN_SCOPES,
-      prompt: 'select_account',
-    });
-    return result.account!;
-  } catch {
-    // Fallback to redirect if popup is blocked
-    await msal.loginRedirect({ scopes: LOGIN_SCOPES });
-    throw new Error('Redirecting for login…');
-  }
+/**
+ * Sign the user in via redirect.
+ *
+ * Uses loginRedirect on all platforms — it's the most reliable auth flow
+ * for PWAs. The page navigates to Microsoft login, then back to the app.
+ * On return, handleRedirectPromise() in initAuth() processes the response.
+ *
+ * Returns null since the page navigates away — callers should not proceed.
+ */
+export async function signIn(): Promise<AccountInfo | null> {
+  const msal = getMsal();
+  await msal.loginRedirect({
+    scopes: LOGIN_SCOPES,
+    prompt: 'select_account',
+  });
+  // loginRedirect navigates away; this code won't continue.
+  return null;
 }
 
+/**
+ * Sign the user out via redirect.
+ */
 export async function signOut(): Promise<void> {
-  const msal = await initAuth();
+  const msal = getMsal();
   const account = getAccount();
-  if (account) {
-    await msal.logoutPopup({ account });
-  }
+  if (!account) return;
+
+  await msal.logoutRedirect({
+    account,
+    postLogoutRedirectUri: REDIRECT_URI,
+  });
+  // Page navigates away
 }
 
 export async function getAccessToken(): Promise<string> {
-  const msal = await initAuth();
+  const msal = getMsal();
   const account = getAccount();
   if (!account) throw new Error('Not signed in');
 
@@ -88,19 +138,9 @@ export async function getAccessToken(): Promise<string> {
     return result.accessToken;
   } catch (err) {
     if (err instanceof InteractionRequiredAuthError) {
-      try {
-        const result = await msal.acquireTokenPopup({
-          scopes: LOGIN_SCOPES,
-        });
-        if (!result.accessToken) {
-          throw new Error('Token acquisition returned empty access token');
-        }
-        return result.accessToken;
-      } catch {
-        // Popup blocked (e.g. Safari/iOS) — fall back to redirect
-        await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
-        throw new Error('Redirecting for token…');
-      }
+      // Redirect for interactive token — silent refresh failed
+      await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
+      throw new Error('Redirecting for token…');
     }
     throw err;
   }
