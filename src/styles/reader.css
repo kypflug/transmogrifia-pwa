@@ -184,17 +184,17 @@
 /* ===== Floating Action Buttons ===== */
 .reader-fab {
   position: absolute;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   display: flex;
   align-items: center;
   gap: 0;
   background: var(--edge-surface-raised);
   border: 1px solid var(--edge-border);
-  border-radius: 22px;
+  border-radius: 26px;
   box-shadow: var(--edge-shadow-md);
   z-index: 100;
-  padding: 3px;
+  padding: 4px;
   opacity: 0.85;
   transition: opacity 0.15s;
 }
@@ -204,8 +204,8 @@
 }
 
 .fab-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +214,7 @@
   background: none;
   color: var(--edge-text-primary);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   transition: background 0.1s, color 0.1s;
 }
@@ -231,7 +231,7 @@
 
 .fab-sep {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--edge-border-subtle);
   flex-shrink: 0;
   margin: 0 2px;

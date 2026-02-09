@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [0.10.13] — 2026-02-09
+
+### Changed
+
+- **FAB pill iOS safe-area clearance** — Added `env(safe-area-inset-bottom)` offset so the floating action buttons sit above the home indicator on notched/Dynamic Island iPhones
+- **Larger FAB touch targets** — Increased button size from 38×38px to 44×44px (Apple HIG minimum), bumped font size, border-radius, and separator height to match
+
+---
+
 ## [0.10.12] — 2026-02-09
 
 ### Fixed
