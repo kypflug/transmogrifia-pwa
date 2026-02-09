@@ -9,6 +9,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Fixed
 
 - **Sign-in flow broken on desktop and mobile** — Popup-based sign-in was failing because MSAL v5's popup monitoring couldn't reliably read the auth response from the popup window (Vite dev server and script loading interfered with the URL hash). Replaced all popup-based auth flows (`loginPopup`, `logoutPopup`, `acquireTokenPopup`) with redirect-based equivalents (`loginRedirect`, `logoutRedirect`, `acquireTokenRedirect`) which are more reliable across all browsers and platforms. Added stale MSAL interaction state cleanup on `handleRedirectPromise` failure to prevent `no_token_request_cache_error` from blocking subsequent sign-in attempts. The `handleRedirectPromise()` return value is now checked in `main.ts` to detect redirect-based sign-in completion and route straight to the library.
+- **iOS standalone PWA sign-in delay** — On iOS, `loginRedirect` opens an in-app Safari sheet instead of navigating the page. When the sheet closes, the PWA resumes without reloading, so `handleRedirectPromise()` never fires on the return. Added a `visibilitychange` listener on the sign-in screen that re-processes the redirect response and checks for a cached account when the app regains focus, transitioning to the library immediately.
 
 ---
 

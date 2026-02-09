@@ -23,6 +23,7 @@ const msalConfig: Configuration = {
 const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'];
 
 let msalInstance: PublicClientApplication | null = null;
+let redirectHandled = false;
 
 /**
  * Initialise MSAL and process any redirect response.
@@ -30,20 +31,26 @@ let msalInstance: PublicClientApplication | null = null;
  * Returns the AuthenticationResult from `handleRedirectPromise()` if the page
  * is loading after a redirect login — callers (main.ts) should check this to
  * know whether the user just signed in via redirect.
+ *
+ * On iOS standalone PWA, loginRedirect opens an in-app Safari sheet rather
+ * than navigating the page. When the sheet closes, the PWA resumes without
+ * reloading. Calling initAuth() again with `force: true` re-processes
+ * handleRedirectPromise() to pick up the cached auth response.
  */
-export async function initAuth(): Promise<AuthenticationResult | null> {
-  if (msalInstance) {
-    // Already initialised — no redirect response to process on subsequent calls
+export async function initAuth(force = false): Promise<AuthenticationResult | null> {
+  if (!msalInstance) {
+    msalInstance = new PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+  } else if (redirectHandled && !force) {
+    // Already initialised and redirect was processed — nothing to do
     return null;
   }
-
-  msalInstance = new PublicClientApplication(msalConfig);
-  await msalInstance.initialize();
 
   // handleRedirectPromise() MUST be called on every page load.
   // It returns non-null when the page is loading after a loginRedirect / acquireTokenRedirect.
   try {
     const response = await msalInstance.handleRedirectPromise();
+    redirectHandled = true;
     return response;
   } catch (err) {
     console.warn('handleRedirectPromise failed (non-fatal):', err);
