@@ -4,7 +4,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [1.1.0] — 2026-02-10
 
 ### Changed
 
