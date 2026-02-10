@@ -66,12 +66,6 @@ export function renderLibrary(root: HTMLElement): void {
           </div>
           <div class="sidebar-header-actions">
             <button class="add-url-btn" id="addUrlBtn" title="Add a URL to transmogrify">+ Add</button>
-            <button class="sync-btn" id="syncBtn" title="Sync articles">
-              <svg class="sync-icon" id="syncIcon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 8a6 6 0 1 1-1.5-4"/>
-                <path d="M14 3v4h-4"/>
-              </svg>
-            </button>
             <div class="user-menu-wrapper">
               <button class="user-btn" id="userBtn" title="Account menu">
                 <span class="user-initials" id="userInitials"></span>
@@ -113,7 +107,15 @@ export function renderLibrary(root: HTMLElement): void {
           </div>
         </div>
 
-        <div class="sidebar-footer" id="sidebarFooter"></div>
+        <div class="sidebar-footer" id="sidebarFooter">
+          <span class="sidebar-footer-stats" id="sidebarFooterStats"></span>
+          <button class="sync-btn" id="syncBtn" title="Sync articles">
+            <svg class="sync-icon" id="syncIcon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 8a6 6 0 1 1-1.5-4"/>
+              <path d="M14 3v4h-4"/>
+            </svg>
+          </button>
+        </div>
       </aside>
 
       <div class="resize-handle" id="resizeHandle"></div>
@@ -1170,10 +1172,10 @@ function setSyncIndicator(syncing: boolean): void {
 }
 
 async function updateFooter(): Promise<void> {
-  const footer = document.getElementById('sidebarFooter')!;
+  const statsEl = document.getElementById('sidebarFooterStats')!;
   const stats = await getCacheStats();
   const sizeMB = (stats.totalSize / (1024 * 1024)).toFixed(1);
-  footer.textContent = `${articles.length} articles · ${stats.count} cached · ${sizeMB} MB`;
+  statsEl.textContent = `${articles.length} articles · ${stats.count} cached · ${sizeMB} MB`;
 }
 
 function fixAnchorLinks(frame: HTMLIFrameElement): void {

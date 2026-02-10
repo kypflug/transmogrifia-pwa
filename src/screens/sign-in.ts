@@ -9,6 +9,7 @@ export function renderSignIn(
 
   container.innerHTML = `
     <div class="sign-in-screen">
+      <div class="sign-in-titlebar"></div>
       <div class="sign-in-hero">
         <picture>
           <source srcset="/images/hero.avif" type="image/avif">

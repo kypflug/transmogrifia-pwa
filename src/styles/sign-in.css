@@ -139,6 +139,26 @@
   color: var(--edge-text-secondary);
 }
 
+/* ===== WCO Titlebar ===== */
+.sign-in-titlebar {
+  display: none;
+}
+
+@media (display-mode: window-controls-overlay) {
+  .sign-in-titlebar {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    background: var(--edge-surface-raised);
+    min-height: env(titlebar-area-height, 32px);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+}
+
 /* ===== Mobile ===== */
 @media (max-width: 480px) {
   .sign-in-card {

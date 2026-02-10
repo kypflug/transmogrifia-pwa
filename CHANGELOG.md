@@ -12,6 +12,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Changed
 
+- **Settings header matches theme** — Settings header now uses the surface/text design tokens (like the library sidebar) instead of a blue-teal gradient, so it blends with the WCO titlebar color
+- **Sign-in WCO titlebar** — Added a surface-colored titlebar strip to the sign-in screen (visible only in Window Controls Overlay mode) so the window controls don't float over the hero image
+
+- **Sync button moved to footer** — Relocated the sync/refresh button from the sidebar header to the sidebar footer (bottom-right, next to library stats) for a cleaner toolbar
 - **Shared viewer chrome bar** — Removed "Open App" CTA button; replaced it with a 🌐 globe button that links to the original article URL
 - **Share metadata stored at share time** — Description, original URL, and hero image are now extracted from the article HTML when sharing and sent to the cloud API with the short link registration. The SSR function and shared viewer consume this pre-computed metadata instead of re-fetching and parsing the article HTML on every view.
 - **Theme color matches app surface** — Browser title bar now uses the page surface color (`#FAFAFA` light, `#1B1B1F` dark, `#F4ECD8` sepia) instead of blue accent, for a cohesive look

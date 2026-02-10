@@ -59,7 +59,7 @@
 .sidebar-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 /* ===== Sync Button ===== */
@@ -455,7 +455,16 @@
   color: var(--edge-text-tertiary);
   border-top: 1px solid var(--edge-border-subtle);
   flex-shrink: 0;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-footer .sync-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  flex-shrink: 0;
 }
 
 /* ===== Resize Handle ===== */
