@@ -24,7 +24,19 @@ import { renderArticleList } from '../components/article-list';
 import { renderArticleHeader } from '../components/article-header';
 import { showToast } from '../components/toast';
 import { RECIPES } from '../recipes';
+import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
+import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
+
+/** A cloud job that is in progress (tracked client-side only). */
+interface PendingJob {
+  jobId: string;
+  url: string;
+  recipeId: string;
+  title: string;      // hostname for display
+  startTime: number;
+  pollTimer?: ReturnType<typeof setTimeout>;
+}
 
 let articles: OneDriveArticleMeta[] = [];
 let cachedIds = new Set<string>();
@@ -33,6 +45,8 @@ let searchQuery = '';
 let sortOrder: SortOrder = 'newest';
 let filterMode: FilterMode = 'all';
 let container: HTMLElement;
+let pendingJobs: PendingJob[] = [];
+let selectedPendingId: string | null = null;
 
 export function renderLibrary(root: HTMLElement): void {
   container = root;
@@ -49,6 +63,7 @@ export function renderLibrary(root: HTMLElement): void {
             <span class="brand-text">Transmogrifia</span>
           </div>
           <div class="sidebar-header-actions">
+            <button class="add-url-btn" id="addUrlBtn" title="Add a URL to transmogrify">+ Add</button>
             <button class="sync-btn" id="syncBtn" title="Sync articles">
               <span class="sync-icon" id="syncIcon">⟳</span>
             </button>
@@ -60,6 +75,7 @@ export function renderLibrary(root: HTMLElement): void {
                 <div class="user-dropdown-name" id="userDropdownName"></div>
                 <hr class="user-dropdown-sep">
                 <button class="user-dropdown-item" id="clearCacheBtn">🗑️ Clear cache</button>
+                <button class="user-dropdown-item" id="settingsBtn">⚙️ Settings</button>
                 <button class="user-dropdown-item" id="signOutBtn">🚪 Sign out</button>
               </div>
             </div>
@@ -119,6 +135,16 @@ export function renderLibrary(root: HTMLElement): void {
           <p id="readerErrorMsg"></p>
           <button class="retry-btn" id="retryBtn">Retry</button>
         </div>
+        <div class="reading-progress hidden" id="readingProgress">
+          <div class="progress-card">
+            <div class="progress-spinner-lg"></div>
+            <h2 class="progress-page-title" id="progressTitle">Transmogrifying…</h2>
+            <div class="progress-recipe" id="progressRecipe"></div>
+            <div class="progress-step" id="progressStep">Generating…</div>
+            <div class="progress-elapsed" id="progressElapsed"></div>
+            <button class="progress-cancel-btn" id="progressCancel">Cancel</button>
+          </div>
+        </div>
         <div class="reader-fab" id="readerFab">
           <button class="fab-btn" id="fabBack" aria-label="Back to list" title="Back to list">←</button>
           <div class="fab-sep"></div>
@@ -143,6 +169,7 @@ async function initLibrary(): Promise<void> {
   setupResizeHandle();
   setupKeyboardShortcuts();
   setupOfflineHandling();
+  setupAddUrl();
   populateRecipeFilters();
   setSelectValues();
   setupFab();
@@ -259,9 +286,15 @@ function getFilteredArticles(): OneDriveArticleMeta[] {
 function renderList(): void {
   const listContainer = document.getElementById('articleList')!;
   const filtered = getFilteredArticles();
-  renderArticleList(listContainer, filtered, cachedIds, currentId);
+  const pending = pendingJobs.map(j => ({
+    title: j.title,
+    recipeId: j.recipeId,
+    startTime: j.startTime,
+    jobId: j.jobId,
+  }));
+  renderArticleList(listContainer, filtered, cachedIds, currentId, pending, selectedPendingId);
 
-  // Attach click handlers
+  // Attach click handlers for articles
   listContainer.querySelectorAll('.article-item').forEach(el => {
     el.addEventListener('click', () => {
       const id = (el as HTMLElement).dataset.id!;
@@ -274,10 +307,63 @@ function renderList(): void {
       }
     });
   });
+
+  // Attach click handlers for pending items
+  listContainer.querySelectorAll('.article-item-pending').forEach(el => {
+    el.addEventListener('click', () => {
+      const jobId = (el as HTMLElement).dataset.jobId;
+      if (jobId) selectPendingJob(jobId);
+    });
+  });
+}
+
+function selectPendingJob(jobId: string): void {
+  const job = pendingJobs.find(j => j.jobId === jobId);
+  if (!job) return;
+
+  currentId = null;
+  selectedPendingId = jobId;
+  renderList();
+  showPendingProgress(job);
+
+  // Mobile: show reading pane
+  if (window.innerWidth < 768) {
+    document.body.classList.add('mobile-reading');
+  }
+}
+
+function showPendingProgress(job: PendingJob): void {
+  showReaderState('progress');
+
+  const progressTitle = document.getElementById('progressTitle')!;
+  const progressRecipe = document.getElementById('progressRecipe')!;
+  const progressStep = document.getElementById('progressStep')!;
+  const progressElapsed = document.getElementById('progressElapsed')!;
+  const progressCancel = document.getElementById('progressCancel')!;
+
+  progressTitle.textContent = job.title || 'Transmogrifying…';
+
+  const recipe = RECIPES.find(r => r.id === job.recipeId);
+  progressRecipe.textContent = recipe ? `${recipe.icon} ${recipe.name}` : job.recipeId;
+
+  progressStep.textContent = '🤖 Generating…';
+
+  const elapsed = Math.round((Date.now() - job.startTime) / 1000);
+  progressElapsed.textContent = elapsed > 0 ? `${elapsed}s elapsed` : '';
+
+  // Wire cancel button
+  progressCancel.onclick = () => {
+    if (!selectedPendingId) return;
+    removePendingJob(selectedPendingId);
+    selectedPendingId = null;
+    showReaderState('placeholder');
+    showToast('Generation cancelled');
+  };
 }
 
 async function openArticle(id: string): Promise<void> {
   currentId = id;
+  selectedPendingId = null;
   renderList(); // Update active state
 
   const meta = articles.find(a => a.id === id);
@@ -380,6 +466,7 @@ function goBack(): void {
   destroyGestures();
   document.body.classList.remove('mobile-reading');
   currentId = null;
+  selectedPendingId = null;
   renderList();
   showReaderState('placeholder');
 }
@@ -506,16 +593,18 @@ async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
   }
 }
 
-function showReaderState(state: 'placeholder' | 'loading' | 'content' | 'error', errorMsg?: string): void {
+function showReaderState(state: 'placeholder' | 'loading' | 'content' | 'error' | 'progress', errorMsg?: string): void {
   const placeholder = document.getElementById('readerPlaceholder')!;
   const loading = document.getElementById('readerLoading')!;
   const content = document.getElementById('readerContent')!;
   const error = document.getElementById('readerError')!;
+  const progress = document.getElementById('readingProgress')!;
 
   placeholder.classList.toggle('hidden', state !== 'placeholder');
   loading.classList.toggle('hidden', state !== 'loading');
   content.classList.toggle('hidden', state !== 'content');
   error.classList.toggle('hidden', state !== 'error');
+  progress.classList.toggle('hidden', state !== 'progress');
 
   if (state === 'error' && errorMsg) {
     document.getElementById('readerErrorMsg')!.textContent = errorMsg;
@@ -555,6 +644,11 @@ function setupUserMenu(): void {
     clearDeltaToken();
     await signOut();
     window.location.reload();
+  });
+
+  document.getElementById('settingsBtn')!.addEventListener('click', () => {
+    dropdown.classList.add('hidden');
+    location.hash = '#settings';
   });
 
   document.getElementById('clearCacheBtn')!.addEventListener('click', async () => {
@@ -694,6 +788,132 @@ function setupSyncButton(): void {
   }
 }
 
+function setupAddUrl(): void {
+  const addBtn = document.getElementById('addUrlBtn');
+  if (!addBtn) return;
+
+  addBtn.addEventListener('click', async () => {
+    // Check prerequisites
+    const error = await checkQueuePrereqs();
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showAddUrlModal();
+  });
+}
+
+export function showAddUrlModal(prefillUrl?: string): void {
+  // Remove existing modal if any
+  document.getElementById('addUrlModal')?.remove();
+
+  const recipeOptions = RECIPES.map(r =>
+    `<option value="${escapeHtml(r.id)}">${escapeHtml(r.icon + ' ' + r.name)}</option>`
+  ).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'addUrlModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2>Add URL</h2>
+        <button class="modal-close" id="addUrlClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-field">
+          <label for="addUrlInput">URL</label>
+          <input type="url" id="addUrlInput" placeholder="https://example.com/article" autofocus>
+        </div>
+        <div class="settings-field">
+          <label for="addUrlRecipe">Recipe</label>
+          <select id="addUrlRecipe">${recipeOptions}</select>
+        </div>
+        <div class="settings-field">
+          <label for="addUrlPrompt">Custom prompt (optional)</label>
+          <input type="text" id="addUrlPrompt" placeholder="Additional instructions…">
+        </div>
+        <div class="settings-field settings-field-toggle">
+          <label for="addUrlImages">
+            <input type="checkbox" id="addUrlImages">
+            <span>Generate images</span>
+          </label>
+          <span class="settings-field-hint">Requires an image provider configured in Settings</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="settings-btn settings-btn-secondary" id="addUrlCancel">Cancel</button>
+        <button class="settings-btn settings-btn-primary" id="addUrlSubmit">✨ Transmogrify</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Pre-fill and focus the URL input
+  const urlInput = document.getElementById('addUrlInput') as HTMLInputElement;
+  if (prefillUrl) {
+    urlInput.value = prefillUrl;
+  }
+  requestAnimationFrame(() => urlInput?.focus());
+
+  // Show/hide custom prompt based on recipe
+  const recipeSelect = document.getElementById('addUrlRecipe') as HTMLSelectElement;
+  const promptField = document.getElementById('addUrlPrompt')!.closest('.settings-field') as HTMLElement;
+  promptField.classList.toggle('hidden', recipeSelect.value !== 'custom');
+  recipeSelect.addEventListener('change', () => {
+    promptField.classList.toggle('hidden', recipeSelect.value !== 'custom');
+  });
+
+  // Close handlers
+  const close = () => overlay.remove();
+  document.getElementById('addUrlClose')!.addEventListener('click', close);
+  document.getElementById('addUrlCancel')!.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // Submit handler
+  document.getElementById('addUrlSubmit')!.addEventListener('click', async () => {
+    const url = urlInput.value.trim();
+    if (!url) {
+      showToast('Please enter a URL', 'error');
+      return;
+    }
+
+    try {
+      new URL(url); // Validate URL
+    } catch {
+      showToast('Please enter a valid URL', 'error');
+      return;
+    }
+
+    const recipe = recipeSelect.value;
+    const customPrompt = (document.getElementById('addUrlPrompt') as HTMLInputElement).value.trim() || undefined;
+    const generateImages = (document.getElementById('addUrlImages') as HTMLInputElement).checked;
+
+    const submitBtn = document.getElementById('addUrlSubmit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Queuing…';
+
+    try {
+      const result = await queueForCloud(url, recipe, customPrompt, generateImages);
+      close();
+
+      // Track as a pending job in the sidebar
+      let hostname: string;
+      try { hostname = new URL(url).hostname; } catch { hostname = url; }
+      addPendingJob(result.jobId, url, recipe, hostname);
+
+      showToast('Queued — article will appear shortly');
+    } catch (err) {
+      showToast('Queue failed: ' + (err as Error).message, 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '✨ Transmogrify';
+    }
+  });
+}
+
 function setSyncIndicator(syncing: boolean): void {
   const icon = document.getElementById('syncIcon');
   if (icon) {
@@ -735,4 +955,109 @@ function fixAnchorLinks(frame: HTMLIFrameElement): void {
   } catch {
     // Cross-origin — ignore
   }
+}
+
+// ─── Pending Job Tracking ──────────────────────────────
+
+/** Interval that re-renders pending items to update elapsed time */
+let pendingTickTimer: ReturnType<typeof setInterval> | null = null;
+
+function addPendingJob(jobId: string, url: string, recipeId: string, title: string): void {
+  const job: PendingJob = {
+    jobId,
+    url,
+    recipeId,
+    title,
+    startTime: Date.now(),
+  };
+
+  pendingJobs.push(job);
+  renderList();
+
+  // Start polling for the new article — cloud jobs typically take 20-60s
+  startPendingPoll(job);
+
+  // Start the elapsed-time tick if not already running
+  if (!pendingTickTimer) {
+    pendingTickTimer = setInterval(() => {
+      if (pendingJobs.length === 0) {
+        clearInterval(pendingTickTimer!);
+        pendingTickTimer = null;
+        return;
+      }
+      renderList();
+      // Update progress pane elapsed time if a pending item is selected
+      if (selectedPendingId) {
+        const job = pendingJobs.find(j => j.jobId === selectedPendingId);
+        if (job) {
+          const elapsed = Math.round((Date.now() - job.startTime) / 1000);
+          const el = document.getElementById('progressElapsed');
+          if (el) el.textContent = elapsed > 0 ? `${elapsed}s elapsed` : '';
+        }
+      }
+    }, 5_000);
+  }
+}
+
+/**
+ * Poll for completion of a pending cloud job by syncing articles.
+ * Checks at 15s, 30s, 60s, then every 30s up to 10 minutes.
+ */
+function startPendingPoll(job: PendingJob): void {
+  const intervals = [15_000, 30_000, 60_000]; // first three delays
+  const STEADY_INTERVAL = 30_000;
+  const MAX_AGE = 10 * 60 * 1000;
+  let attempt = 0;
+
+  function scheduleNext() {
+    const elapsed = Date.now() - job.startTime;
+    if (elapsed > MAX_AGE) {
+      // Give up — remove from pending
+      removePendingJob(job.jobId);
+      showToast('Cloud job timed out. Try syncing manually.', 'error');
+      return;
+    }
+
+    const delay = attempt < intervals.length ? intervals[attempt] : STEADY_INTERVAL;
+    attempt++;
+
+    job.pollTimer = setTimeout(async () => {
+      // Check if this job was already resolved
+      if (!pendingJobs.find(j => j.jobId === job.jobId)) return;
+
+      try {
+        const prevCount = articles.length;
+        await loadArticles();
+
+        // If new articles appeared, check if any match this job's URL
+        if (articles.length > prevCount) {
+          const newArticle = articles.find(a =>
+            a.originalUrl === job.url && a.createdAt > job.startTime - 5000
+          );
+          if (newArticle) {
+            removePendingJob(job.jobId);
+            showToast(`"${newArticle.title}" is ready!`);
+            openArticle(newArticle.id);
+            return;
+          }
+        }
+      } catch {
+        // Sync failed — try again next interval
+      }
+
+      scheduleNext();
+    }, delay);
+  }
+
+  scheduleNext();
+}
+
+function removePendingJob(jobId: string): void {
+  const job = pendingJobs.find(j => j.jobId === jobId);
+  if (job?.pollTimer) clearTimeout(job.pollTimer);
+  pendingJobs = pendingJobs.filter(j => j.jobId !== jobId);
+  if (selectedPendingId === jobId) {
+    selectedPendingId = null;
+  }
+  renderList();
 }

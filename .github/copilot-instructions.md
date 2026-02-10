@@ -3,7 +3,7 @@
 > Spec & implementation plan: see `pwa-spec/` in the companion repo [transmogrify-ext](https://github.com/kypflug/transmogrify-ext)
 
 ## What This Is
-Standalone PWA (Progressive Web App) for reading Transmogrifier articles on any device. Users sign in with their Microsoft account, and the app loads their saved transmogrifications from OneDrive. Read-only — no article generation.
+Standalone PWA (Progressive Web App) for reading Transmogrifier articles on any device. Users sign in with their Microsoft account, and the app loads their saved transmogrifications from OneDrive. Users can also submit URLs for cloud transmogrification directly from the PWA.
 
 ## Tech Stack
 TypeScript (strict) | Vite | Vanilla TS | MSAL.js 2.x (`@azure/msal-browser`) | Microsoft Graph API | IndexedDB | vite-plugin-pwa (Workbox)
@@ -11,17 +11,22 @@ TypeScript (strict) | Vite | Vanilla TS | MSAL.js 2.x (`@azure/msal-browser`) | 
 ## Structure
 ```
 src/
-  main.ts              # Entry point: auth check → route to sign-in or library
+  main.ts              # Entry point: auth check → hash-based route to sign-in, library, or settings
   recipes.ts           # Minimal recipe metadata (id, name, icon) for display
-  types.ts             # Shared types (OneDriveArticleMeta, etc.)
+  types.ts             # Shared types (OneDriveArticleMeta, TransmogrifierSettings, UserAIConfig, etc.)
   services/
     auth.ts            # MSAL wrapper (sign-in, sign-out, token acquisition)
-    graph.ts           # Microsoft Graph API calls (list, download, upload meta)
-    cache.ts           # IndexedDB article cache (metadata + HTML)
+    graph.ts           # Microsoft Graph API calls (list, download, upload meta, settings sync)
+    cache.ts           # IndexedDB article cache (metadata + HTML + settings store)
     preferences.ts     # localStorage prefs (sort, filter, theme, sidebar width)
+    settings.ts        # Encrypted settings management (device-key local + passphrase cloud sync)
+    crypto.ts          # AES-256-GCM encryption (passphrase via PBKDF2 and device-key modes)
+    device-key.ts      # Per-device non-extractable CryptoKey in IndexedDB
+    cloud-queue.ts     # Cloud API queue for URL-based transmogrification
   screens/
     sign-in.ts         # Sign-in screen controller
-    library.ts         # Two-pane library: article list + reader
+    library.ts         # Two-pane library: article list + reader + Add URL modal
+    settings.ts        # Settings UI (AI/image providers, cloud URL, sync passphrase)
   components/
     article-list.ts    # Render/filter/sort article list items
     article-header.ts  # Reader header bar (title, actions)
@@ -31,6 +36,7 @@ src/
     sign-in.css        # Sign-in screen
     library.css        # Library layout (adapted from extension)
     reader.css         # Reader pane
+    settings.css       # Settings screen
 ```
 
 ## Key Patterns
@@ -38,9 +44,12 @@ src/
 - **Data flow:** List `.json` metadata from OneDrive AppFolder → cache in IndexedDB → lazy-download HTML on article open
 - **Same Azure AD app** as the Transmogrifier extension (client ID `4b54bcee-1c83-4f52-9faf-d0dfd89c5ac2`), sharing the same `Files.ReadWrite.AppFolder` scope and `articles/` folder
 - **Offline-first:** Article HTML cached in IndexedDB after first download; app shell precached by service worker
-- **Favorite toggle** is the only write operation — optimistic local update, then PUT updated `.json` to OneDrive
+- **Favorite toggle** is a write operation — optimistic local update, then PUT updated `.json` to OneDrive
 - **Article rendering:** Sandboxed iframe with `srcdoc`, same as the extension
 - **Responsive:** Two-pane (≥768px) or single-pane with slide transition (<768px)
+- **Hash routing:** `main.ts` routes between `#library` (default) and `#settings` via `hashchange`
+- **Settings encryption:** Two-tier model — device key (AES-256-GCM, non-extractable CryptoKey in IndexedDB) for local, user passphrase (PBKDF2 600k + AES-256-GCM) for OneDrive sync. Same crypto as the extension.
+- **Add URL:** Library toolbar has a "+ Add" button that opens a modal to submit a URL + recipe to the cloud API for transmogrification. Sends user's AI keys (BYOK) in the request body.
 - **No `chrome.*` APIs** — this is a standard web app, not an extension
 
 ## OneDrive Storage Layout
@@ -58,6 +67,8 @@ src/
 | Download HTML | GET | `/me/drive/special/approot:/articles/{id}.html:/content` |
 | Update metadata | PUT | `/me/drive/special/approot:/articles/{id}.json:/content` |
 | User profile | GET | `/me` |
+| Download settings | GET | `/me/drive/special/approot:/settings.enc.json:/content` |
+| Upload settings | PUT | `/me/drive/special/approot:/settings.enc.json:/content` |
 
 ## Design System
 Fluent/Edge design tokens inherited from the extension, defined as CSS custom properties in `:root` and overridden per theme.
@@ -172,6 +183,24 @@ Pattern: `[component]-[element]` with `-` separators. State modifiers are separa
 - **CHANGELOG.md:** Add an entry for every meaningful change (new features, bug fixes, refactors). Use `## [Unreleased]` at the top and group entries under `### Added`, `### Changed`, `### Fixed`, `### Removed`
 - **Never push to remote** (`git push`) unless the user explicitly asks you to. Stage and commit locally only.
 
+## Compatibility Contract (shared with extension)
+
+These types and formats must stay in sync between the extension and PWA:
+
+| Surface | Extension file | PWA file |
+|---|---|---|
+| `EncryptedEnvelope` | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
+| `LocalEncryptedEnvelope` | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
+| `device-key.ts` | `src/shared/device-key.ts` | `src/services/device-key.ts` |
+| `TransmogrifierSettings` | `src/shared/settings-service.ts` | `src/types.ts` |
+| `AIProviderSettings` / `ImageProviderSettings` | `src/shared/settings-service.ts` | `src/types.ts` |
+| `UserAIConfig` | `src/shared/types.ts` | `src/types.ts` |
+| PBKDF2 iterations (600,000) | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
+| Settings sync path | `settings.enc.json` | `SETTINGS_PATH` in `graph.ts` |
+| Queue request body | `src/shared/cloud-queue-service.ts` | `src/services/cloud-queue.ts` |
+| `OneDriveArticleMeta` | `src/shared/onedrive-service.ts` | `src/types.ts` |
+| OneDrive articles path | `articles/` | `APP_FOLDER` in `graph.ts` |
+
 ## Azure OpenAI API Patterns
 
 The `.env` file contains credentials for both chat completion and image generation. These are Azure OpenAI endpoints (not openai.com), so the URL format and auth header differ from the standard OpenAI SDK.
@@ -275,7 +304,6 @@ Adapt the subject matter and composition details as needed, but keep the waterco
 - **Content filter:** `finish_reason === 'content_filter'` means Azure blocked the output
 
 ## What This App Does NOT Do
-- Generate or transmogrify articles (read-only)
+- Generate articles locally (cloud API handles transmogrification)
 - Respin articles with different recipes
-- Delete articles from OneDrive
 - Use any `chrome.*` extension APIs

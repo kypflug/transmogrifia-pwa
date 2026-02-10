@@ -4,6 +4,35 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.11.0] — 2026-02-09
+
+### Added
+
+- **Settings screen** — New `#settings` route with card-based UI for configuring AI provider (Azure OpenAI, OpenAI, Anthropic, Google), image provider, and sync passphrase; accessible via user dropdown menu
+- **Encrypted settings storage** — API keys encrypted at rest using a per-device AES-256-GCM CryptoKey stored in IndexedDB; zero-friction local access with no passphrase needed
+- **Settings sync via OneDrive** — Push/pull encrypted settings to/from OneDrive (`settings.enc.json`) using a user-chosen passphrase (PBKDF2 600k iterations + AES-256-GCM); compatible with the Transmogrifier extension's sync format
+- **Add URL feature** — "+ Add" button in library toolbar opens a modal to submit a URL for cloud transmogrification; auto-syncs to pick up the result
+- **In-progress job tracking** — Cloud jobs appear as pending items at the top of the article list with a spinner, recipe, and elapsed time; clicking shows a progress card in the reading pane with a cancel button; smart polling (15s → 30s → 60s → every 30s) detects completion and auto-opens the new article
+- **Generate images toggle** — "Generate images" checkbox in the Add URL modal; sends image provider config to the cloud API when enabled
+- **Share Target support** — PWA registers as a Web Share Target (`share_target` in manifest); on Android, ChromeOS, Windows, and macOS, sharing a URL from any app opens the Add URL modal pre-filled
+- **iOS Share Shortcut guide** — iOS Settings section with step-by-step instructions for creating an Apple Shortcut that sends shared URLs to the PWA via the share sheet; includes a copy-able URL template
+- **Cloud queue service** — New `cloud-queue.ts` service sends URL + user AI keys to the cloud API for server-side transmogrification
+- **Crypto service** — `crypto.ts` and `device-key.ts` ported from the extension (pure Web Crypto + IndexedDB, no Chrome dependencies)
+- **Hash-based routing** — `main.ts` now routes between `#library` (default) and `#settings` via `hashchange` listener
+- **Idle timeout for passphrase** — Sync passphrase cleared from memory after 30 minutes of inactivity and on page unload
+
+### Changed
+
+- **IndexedDB version bump** — `TransmogrifiaPWA` database version 1 → 2; added `settings` object store for encrypted settings envelope
+- **Types expanded** — Added `AIProvider`, `ImageProvider`, `AIProviderSettings`, `ImageProviderSettings`, `CloudSettings`, `TransmogrifierSettings`, `UserAIConfig`, and `UserImageConfig` types to `types.ts`
+- **Graph service** — Added `downloadSettings()` and `uploadSettings()` functions for OneDrive settings sync; uses `CloudSettingsFile` wrapper format (`{ envelope, updatedAt }`) compatible with the extension
+
+---
+
 ## [0.10.13] — 2026-02-09
 
 ### Changed

@@ -1,9 +1,10 @@
 import type { OneDriveArticleMeta } from '../types';
 
 const DB_NAME = 'TransmogrifiaPWA';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const META_STORE = 'metadata';
 const HTML_STORE = 'html';
+const SETTINGS_STORE = 'settings';
 
 let db: IDBDatabase | null = null;
 
@@ -25,6 +26,9 @@ async function getDB(): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(HTML_STORE)) {
         database.createObjectStore(HTML_STORE); // keyed by article id
+      }
+      if (!database.objectStoreNames.contains(SETTINGS_STORE)) {
+        database.createObjectStore(SETTINGS_STORE); // key-value store, key = 'envelope'
       }
     };
 
@@ -168,6 +172,41 @@ export async function clearCache(): Promise<void> {
     const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
     tx.objectStore(META_STORE).clear();
     tx.objectStore(HTML_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ─── Settings store helpers ────────────────
+
+/** Get a value from the settings store */
+export async function getSettingsValue<T>(key: string): Promise<T | null> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(SETTINGS_STORE, 'readonly');
+    const req = tx.objectStore(SETTINGS_STORE).get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Put a value into the settings store */
+export async function setSettingsValue<T>(key: string, value: T): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(SETTINGS_STORE, 'readwrite');
+    tx.objectStore(SETTINGS_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** Remove a value from the settings store */
+export async function removeSettingsValue(key: string): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(SETTINGS_STORE, 'readwrite');
+    tx.objectStore(SETTINGS_STORE).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

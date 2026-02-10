@@ -25,6 +25,15 @@ export default defineConfig({
         start_url: '/',
         orientation: 'any',
         categories: ['productivity', 'education'],
+        share_target: {
+          action: '/?share-target',
+          method: 'GET',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+          },
+        },
         icons: [
           { src: 'icons/icon-48.png', sizes: '48x48', type: 'image/png' },
           { src: 'icons/icon-128.png', sizes: '128x128', type: 'image/png' },

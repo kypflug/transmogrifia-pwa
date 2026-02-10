@@ -1,0 +1,320 @@
+/* ─── Settings Screen — Styles ───
+ * Card-based form on a centered column, matching the extension's design.
+ */
+
+/* ─── Layout ─── */
+.settings-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Header ─── */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #0078D4 0%, #038387 100%);
+  color: white;
+  flex-shrink: 0;
+}
+
+.settings-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-header-icon {
+  font-size: 20px;
+}
+
+.settings-header-left h1 {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-save-indicator {
+  font-size: 12px;
+  color: #A0E8A0;
+  font-weight: 500;
+  transition: opacity 0.3s;
+}
+
+.settings-header-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 5px 14px;
+  border-radius: var(--edge-radius);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.settings-header-btn:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ─── Content ─── */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── Section Cards ─── */
+.settings-section {
+  background: var(--edge-surface-raised);
+  border: 1px solid var(--edge-border-subtle);
+  border-radius: var(--edge-radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--edge-shadow-sm);
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.settings-section-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--edge-text-primary);
+}
+
+.settings-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  background: var(--edge-surface-sunken);
+  color: var(--edge-text-secondary);
+}
+
+.settings-badge.configured {
+  background: #DFF6DD;
+  color: var(--edge-green);
+}
+
+.settings-badge.warning {
+  background: var(--edge-red-light);
+  color: var(--edge-red);
+}
+
+.settings-section-desc {
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* ─── Form Fields ─── */
+.settings-field {
+  margin-bottom: 12px;
+}
+
+.settings-field:last-child {
+  margin-bottom: 0;
+}
+
+.settings-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--edge-text-secondary);
+  margin-bottom: 4px;
+}
+
+.settings-field input[type="text"],
+.settings-field input[type="password"],
+.settings-field input[type="url"],
+.settings-field select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--edge-text-primary);
+  background: var(--edge-surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.settings-field input:focus,
+.settings-field select:focus {
+  outline: none;
+  border-color: var(--edge-blue);
+  box-shadow: 0 0 0 1px var(--edge-blue);
+}
+
+.settings-field input::placeholder {
+  color: var(--edge-text-tertiary);
+}
+
+.settings-input-action {
+  display: flex;
+  gap: 4px;
+}
+
+.settings-input-action input {
+  flex: 1;
+}
+
+.settings-input-action-btn {
+  background: var(--edge-surface);
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.settings-input-action-btn:hover {
+  background: var(--edge-surface-sunken);
+}
+
+/* ─── Provider Fields ─── */
+.settings-provider-fields {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edge-border-subtle);
+}
+
+/* ─── Buttons ─── */
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.settings-btn {
+  padding: 7px 16px;
+  border-radius: var(--edge-radius);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  border: none;
+}
+
+.settings-btn-primary {
+  background: var(--edge-blue);
+  color: white;
+}
+
+.settings-btn-primary:hover {
+  background: var(--edge-blue-hover);
+}
+
+.settings-btn-primary:disabled {
+  background: var(--edge-border);
+  color: var(--edge-text-tertiary);
+  cursor: not-allowed;
+}
+
+.settings-btn-secondary {
+  background: var(--edge-surface);
+  color: var(--edge-text-primary);
+  border: 1px solid var(--edge-border);
+}
+
+.settings-btn-secondary:hover {
+  background: var(--edge-surface-sunken);
+}
+
+.settings-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn-danger {
+  background: var(--edge-red);
+  color: white;
+}
+
+.settings-btn-danger:hover {
+  background: #B92D31;
+}
+
+.settings-field-error {
+  font-size: 12px;
+  color: var(--edge-red);
+}
+
+/* ─── Sync Section ─── */
+.settings-sync-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.settings-sync-status {
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+  min-height: 18px;
+}
+
+/* ─── Danger Zone ─── */
+.settings-danger-section {
+  border-color: var(--edge-red-light);
+}
+
+.settings-danger-section .settings-section-header h2 {
+  color: var(--edge-red);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 520px) {
+  .settings-content {
+    padding: 16px;
+  }
+  .settings-section {
+    padding: 16px;
+  }
+  .settings-header {
+    padding: 12px 16px;
+  }
+}
+
+/* iOS input zoom prevention */
+@supports (-webkit-touch-callout: none) {
+  .settings-field input,
+  .settings-field select {
+    font-size: 16px;
+  }
+}
+
+/* ─── iOS Shortcut Guide ─── */
+.shortcut-steps ol {
+  margin: 8px 0 12px;
+  padding-left: 20px;
+  line-height: 1.7;
+  font-size: 13px;
+  color: var(--edge-text-secondary);
+}
+
+.shortcut-steps li {
+  margin-bottom: 4px;
+}

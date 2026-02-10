@@ -1,6 +1,9 @@
 import { initAuth, isSignedIn } from './services/auth';
 import { renderSignIn } from './screens/sign-in';
-import { renderLibrary } from './screens/library';
+import { renderLibrary, showAddUrlModal } from './screens/library';
+import { renderSettings } from './screens/settings';
+import { checkQueuePrereqs } from './services/cloud-queue';
+import { showToast } from './components/toast';
 import { applyTheme } from './theme';
 import { escapeHtml } from './utils/storage';
 
@@ -59,8 +62,58 @@ async function boot(app: HTMLElement): Promise<void> {
   const redirectResponse = await initAuth();
 
   if (redirectResponse?.account || isSignedIn()) {
-    renderLibrary(app);
+    route(app);
+    window.addEventListener('hashchange', () => route(app));
+    handleShareTarget();
   } else {
-    renderSignIn(app, () => renderLibrary(app));
+    renderSignIn(app, () => {
+      route(app);
+      window.addEventListener('hashchange', () => route(app));
+    });
   }
+}
+
+function route(app: HTMLElement): void {
+  const hash = location.hash.slice(1);
+  if (hash === 'settings') {
+    renderSettings(app);
+  } else {
+    renderLibrary(app);
+  }
+}
+
+/**
+ * Handle incoming Share Target intents.
+ *
+ * When the PWA is invoked via the OS share sheet the browser navigates to
+ * `/?share-target&url=…&title=…&text=…`. We extract the shared URL, clean
+ * the address bar, and auto-open the Add URL modal pre-filled.
+ */
+function handleShareTarget(): void {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('share-target')) return;
+
+  // Extract the URL — may be in `url` param directly, or embedded in `text`
+  let sharedUrl = params.get('url') || '';
+  if (!sharedUrl) {
+    // Some apps put the URL in `text` instead
+    const text = params.get('text') || '';
+    const urlMatch = text.match(/https?:\/\/\S+/);
+    if (urlMatch) sharedUrl = urlMatch[0];
+  }
+
+  // Clean the URL so reloads don't re-trigger
+  history.replaceState(null, '', '/');
+
+  if (!sharedUrl) return;
+
+  // Wait a tick for the library to finish rendering, then open the modal
+  requestAnimationFrame(async () => {
+    const error = await checkQueuePrereqs();
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showAddUrlModal(sharedUrl);
+  });
 }

@@ -54,6 +54,37 @@ export function renderArticleItem(
 }
 
 /**
+ * Render a pending job item (in-progress cloud generation).
+ */
+export function renderPendingItem(
+  title: string,
+  recipeId: string,
+  startTime: number,
+  jobId: string,
+  isActive = false,
+): string {
+  const recipe = getRecipe(recipeId);
+  const icon = recipe?.icon ?? '📄';
+  const recipeName = recipe?.name ?? recipeId;
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+  const activeClass = isActive ? ' active' : '';
+
+  return `
+    <div class="article-item-pending${activeClass}" data-job-id="${jobId}" tabindex="0" role="button">
+      <div class="pending-spinner"></div>
+      <div class="pending-content">
+        <div class="article-title">${escapeHtml(title)}</div>
+        <div class="article-item-bottom">
+          <span class="article-recipe">${icon} ${escapeHtml(recipeName)}</span>
+          <span class="pending-status">Generating… ${elapsedStr}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
  * Render the full article list.
  */
 export function renderArticleList(
@@ -61,8 +92,14 @@ export function renderArticleList(
   articles: OneDriveArticleMeta[],
   cachedIds: Set<string>,
   activeId: string | null,
+  pending?: { title: string; recipeId: string; startTime: number; jobId: string }[],
+  selectedPendingId?: string | null,
 ): void {
-  if (articles.length === 0) {
+  const pendingHtml = pending && pending.length > 0
+    ? pending.map(p => renderPendingItem(p.title, p.recipeId, p.startTime, p.jobId, p.jobId === selectedPendingId)).join('')
+    : '';
+
+  if (articles.length === 0 && !pendingHtml) {
     container.innerHTML = `
       <div class="empty-state">
         <span class="empty-icon">📭</span>
@@ -73,7 +110,7 @@ export function renderArticleList(
     return;
   }
 
-  container.innerHTML = articles
+  container.innerHTML = pendingHtml + articles
     .map(a => renderArticleItem(a, cachedIds.has(a.id), a.id === activeId))
     .join('');
 }

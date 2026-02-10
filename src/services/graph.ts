@@ -1,9 +1,11 @@
 import { getAccessToken } from './auth';
 import type { OneDriveArticleMeta, UserProfile } from '../types';
+import type { EncryptedEnvelope } from './crypto';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const APP_FOLDER = 'articles';
+const SETTINGS_PATH = 'settings.enc.json';
 const DELTA_TOKEN_KEY = 'transmogrifia_delta_token';
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -233,4 +235,45 @@ export async function getUserProfile(): Promise<UserProfile> {
   const res = await fetch(`${GRAPH_BASE}/me`, { headers });
   if (!res.ok) throw new Error('Failed to fetch profile');
   return res.json();
+}
+
+// ─── Encrypted settings sync ────────────────
+
+/** Shape of settings.enc.json on OneDrive (matches extension format) */
+export interface CloudSettingsFile {
+  envelope: EncryptedEnvelope;
+  updatedAt: number;
+}
+
+/**
+ * Download encrypted settings from OneDrive AppFolder.
+ * Returns the parsed wrapper (envelope + updatedAt), or null if no settings file exists (404).
+ */
+export async function downloadSettings(): Promise<CloudSettingsFile | null> {
+  const headers = await authHeaders();
+  const res = await fetch(
+    `${GRAPH_BASE}/me/drive/special/approot:/${SETTINGS_PATH}:/content`,
+    { headers },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Download settings failed: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Upload encrypted settings to OneDrive AppFolder.
+ * Wraps the envelope in `{ envelope, updatedAt }` to match the extension format.
+ */
+export async function uploadSettings(envelope: EncryptedEnvelope, updatedAt: number): Promise<void> {
+  const headers = await authHeaders();
+  const payload: CloudSettingsFile = { envelope, updatedAt };
+  const res = await fetch(
+    `${GRAPH_BASE}/me/drive/special/approot:/${SETTINGS_PATH}:/content`,
+    {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) throw new Error(`Upload settings failed: ${res.status}`);
 }

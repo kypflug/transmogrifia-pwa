@@ -1,6 +1,7 @@
 @import './sign-in.css';
 @import './library.css';
 @import './reader.css';
+@import './settings.css';
 
 /* ===== Reset & Base ===== */
 *, *::before, *::after {
@@ -214,4 +215,108 @@ body.is-offline .offline-banner {
 
 .boot-error-reload:hover {
   background: var(--edge-blue-hover);
+}
+
+/* ===== Add URL Button ===== */
+.add-url-btn {
+  background: var(--edge-blue);
+  color: white;
+  border: none;
+  border-radius: var(--edge-radius);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.add-url-btn:hover {
+  background: var(--edge-blue-hover);
+}
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  padding: 16px;
+}
+
+.modal-dialog {
+  background: var(--edge-surface-raised);
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius-lg);
+  box-shadow: var(--edge-shadow-md);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--edge-border-subtle);
+}
+
+.modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--edge-text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--edge-text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--edge-radius);
+  transition: background 0.15s;
+}
+
+.modal-close:hover {
+  background: var(--edge-surface-sunken);
+}
+
+.modal-body {
+  padding: 16px 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--edge-border-subtle);
+}
+
+/* ===== Toggle field ===== */
+.settings-field-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.settings-field-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--edge-accent, #0078d4);
+  cursor: pointer;
+}
+.settings-field-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+  margin-top: 2px;
 }
