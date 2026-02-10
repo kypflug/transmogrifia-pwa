@@ -11,6 +11,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 - **Shared viewer chrome bar** — Removed "Open App" CTA button; replaced it with a 🌐 globe button that links to the original article URL
 - **Share metadata stored at share time** — Description, original URL, and hero image are now extracted from the article HTML when sharing and sent to the cloud API with the short link registration. The SSR function and shared viewer consume this pre-computed metadata instead of re-fetching and parsing the article HTML on every view.
 
+### Fixed
+
+- **Missing globe button & meta previews on shared pages** — Cloud API (`POST /api/share`) was not persisting `description`, `originalUrl`, and `image` fields, and `GET /api/s/{code}` was not returning them. Fixed in transmogrify-ext cloud functions. Existing shares will still lack these fields until re-shared.
+
 ### Added
 
 - **Social media preview tags** — Shared article pages inject OpenGraph and Twitter Card meta tags (title, description, image) so share links get rich previews when posted on social media. Two layers: server-side (Azure Function) for crawlers, client-side (`setDocumentMeta`) as fallback.

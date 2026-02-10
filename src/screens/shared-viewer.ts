@@ -61,10 +61,10 @@ export async function renderSharedViewer(
   container.innerHTML = `
     <div class="shared-viewer">
       <div class="shared-viewer-chrome">
-        <div class="shared-viewer-brand">
+        <a class="shared-viewer-brand" href="https://transmogrifia.app">
           <img src="/icons/icon-64.png" alt="" width="24" height="24">
-          <span>Library of Transmogrifia</span>
-        </div>
+          <span>Transmogrifia</span>
+        </a>
       </div>
       <div class="shared-viewer-loading" id="sharedLoading">
         <div class="shared-viewer-spinner"></div>
@@ -133,10 +133,10 @@ export async function renderSharedViewer(
         ? `<a class="shared-viewer-orig-btn" href="${escapeAttr(originalUrl)}" target="_blank" rel="noopener" title="Open original article">🌐</a>`
         : '';
       chrome.innerHTML = `
-        <div class="shared-viewer-brand">
+        <a class="shared-viewer-brand" href="https://transmogrifia.app">
           <img src="/icons/icon-64.png" alt="" width="24" height="24">
-          <span>Library of Transmogrifia</span>
-        </div>
+          <span>Transmogrifia</span>
+        </a>
         <div class="shared-viewer-title">${escapeHtml(title)}</div>
         ${globeBtn}
       `;
@@ -146,10 +146,10 @@ export async function renderSharedViewer(
     container.innerHTML = `
       <div class="shared-viewer">
         <div class="shared-viewer-chrome">
-          <div class="shared-viewer-brand">
+          <a class="shared-viewer-brand" href="https://transmogrifia.app">
             <img src="/icons/icon-64.png" alt="" width="24" height="24">
-            <span>Library of Transmogrifia</span>
-          </div>
+            <span>Transmogrifia</span>
+          </a>
         </div>
         <div class="shared-viewer-error">
           <p class="shared-viewer-error-icon">🔗</p>
