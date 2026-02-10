@@ -2,6 +2,7 @@
 @import './library.css';
 @import './reader.css';
 @import './settings.css';
+@import './shared-viewer.css';
 
 /* ===== Reset & Base ===== */
 *, *::before, *::after {
@@ -298,6 +299,75 @@ body.is-offline .offline-banner {
   gap: 8px;
   padding: 12px 20px 16px;
   border-top: 1px solid var(--edge-border-subtle);
+}
+
+/* Small modal variant */
+.modal-sm {
+  max-width: 420px;
+}
+
+/* ===== Share dialog ===== */
+.share-description {
+  margin: 0 0 12px;
+  color: var(--edge-text-secondary);
+  font-size: 13px;
+}
+
+.share-url-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.share-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: monospace;
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  background: var(--edge-surface-sunken);
+  color: var(--edge-text-primary);
+}
+
+.share-url-input:focus {
+  outline: none;
+  border-color: var(--edge-accent, #0078d4);
+}
+
+.share-copy-inline {
+  flex-shrink: 0;
+  min-width: 36px;
+  padding: 6px 8px;
+}
+
+.share-expires {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+}
+
+.settings-btn-danger {
+  background: #d13438;
+  color: #fff;
+  border: 1px solid #d13438;
+  padding: 6px 16px;
+  border-radius: var(--edge-radius);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.settings-btn-danger:hover {
+  background: #b52e31;
+}
+
+.settings-btn-danger:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* ===== Toggle field ===== */

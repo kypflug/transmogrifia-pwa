@@ -19,6 +19,9 @@ export function renderArticleHeader(
   const hostname = getHostname(meta.originalUrl);
   const favIcon = meta.isFavorite ? '★' : '☆';
   const favClass = meta.isFavorite ? ' active' : '';
+  const shareIcon = meta.sharedUrl ? '🔗' : '📤';
+  const shareClass = meta.sharedUrl ? ' active' : '';
+  const shareTitle = meta.sharedUrl ? 'Manage share link' : 'Share article';
 
   container.innerHTML = `
     <div class="article-header">
@@ -37,8 +40,11 @@ export function renderArticleHeader(
         <button class="action-btn fav-btn${favClass}" id="favBtn" title="Toggle favorite">
           <span class="fav-icon">${favIcon}</span>
         </button>
+        <button class="action-btn share-btn${shareClass}" id="shareBtn" title="${shareTitle}">
+          <span class="share-icon">${shareIcon}</span>
+        </button>
         <button class="action-btn orig-btn" id="origBtn" title="Open original article">
-          🔗
+          🌐
         </button>
         <button class="action-btn del-btn" id="delBtn" title="Delete article">
           🗑️

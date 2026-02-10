@@ -27,6 +27,8 @@ import { RECIPES } from '../recipes';
 import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
 import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
+import { shareArticle, unshareArticle } from '../services/blob-storage';
+import { getEffectiveSharingConfig } from '../services/settings';
 
 /** A cloud job that is in progress (tracked client-side only). */
 interface PendingJob {
@@ -398,12 +400,25 @@ async function openArticle(id: string): Promise<void> {
 
   // Render in iframe
   const frame = document.getElementById('contentFrame') as HTMLIFrameElement;
-  // Inject styles: hide extension UI + lock horizontal scroll
+  // Inject styles: hide extension UI + lock horizontal scroll + ensure vertical scroll
+  //
+  // IMPORTANT: overflow-x:hidden is only on <html>, NOT <body>.
+  // Per CSS spec, setting one overflow axis to hidden/auto/scroll forces the
+  // other axis from visible → auto. If body gets overflow-y:auto but has no
+  // scrollable overflow (scrollH == clientH), it becomes a "scroll trap" —
+  // the browser absorbs wheel events without actually scrolling, and never
+  // propagates them up to <html> (the real scroll container).
   const injectedStyles = `<style>
     .remix-save-fab { display: none !important; }
-    html, body {
+    html {
       max-width: 100vw !important;
       overflow-x: hidden !important;
+      touch-action: pan-y pinch-zoom;
+      overscroll-behavior: none;
+    }
+    body {
+      max-width: 100vw !important;
+      overflow: visible !important;
       touch-action: pan-y pinch-zoom;
       overscroll-behavior: none;
     }
@@ -429,6 +444,7 @@ async function openArticle(id: string): Promise<void> {
       }
 
       fixAnchorLinks(frame);
+      fixScrollBlocking(frame);
 
       // Gestures — attach to the settled contentDocument
       destroyGestures();
@@ -530,6 +546,12 @@ function setupArticleActions(meta: OneDriveArticleMeta): void {
   if (delBtn) {
     delBtn.addEventListener('click', () => confirmDeleteArticle(meta));
   }
+
+  // Share article
+  const shareBtn = document.getElementById('shareBtn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => handleShareClick(meta));
+  }
 }
 
 async function toggleFavorite(id: string): Promise<void> {
@@ -593,6 +615,227 @@ async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
     console.error('Failed to delete article:', err);
     showToast('Failed to delete article', 'error');
   }
+}
+
+function handleShareClick(meta: OneDriveArticleMeta): void {
+  // Remove existing share modal if any
+  document.getElementById('shareModal')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'shareModal';
+  overlay.className = 'modal-overlay';
+
+  if (meta.sharedUrl) {
+    // Already shared — show link with copy + unshare options
+    const expiresInfo = meta.shareExpiresAt
+      ? `<p class="share-expires">Expires ${new Date(meta.shareExpiresAt).toLocaleDateString()}</p>`
+      : '';
+
+    overlay.innerHTML = `
+      <div class="modal-dialog modal-sm">
+        <div class="modal-header">
+          <h2>🔗 Shared Article</h2>
+          <button class="modal-close" id="shareModalClose" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p>This article is shared:</p>
+          <div class="share-url-row">
+            <input type="text" class="share-url-input" id="shareUrlDisplay" value="${escapeHtml(meta.sharedUrl)}" readonly>
+            <button class="settings-btn settings-btn-secondary share-copy-inline" id="shareCopyInline" title="Copy to clipboard">📋</button>
+          </div>
+          ${expiresInfo}
+        </div>
+        <div class="modal-footer">
+          <button class="settings-btn settings-btn-danger" id="shareUnshareBtn">Unshare</button>
+          <button class="settings-btn settings-btn-primary" id="shareCopyCloseBtn">📋 Copy URL</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    document.getElementById('shareModalClose')!.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    // Inline copy button
+    document.getElementById('shareCopyInline')!.addEventListener('click', () => {
+      navigator.clipboard.writeText(meta.sharedUrl!).then(() => {
+        const btn = document.getElementById('shareCopyInline')!;
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '📋'; }, 2000);
+      });
+    });
+
+    // Copy & close button
+    document.getElementById('shareCopyCloseBtn')!.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(meta.sharedUrl!);
+      showToast('Share link copied!');
+      close();
+    });
+
+    // Unshare button
+    document.getElementById('shareUnshareBtn')!.addEventListener('click', async () => {
+      const btn = document.getElementById('shareUnshareBtn') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = 'Removing…';
+      try {
+        await unshareArticle(meta.id, meta.shareShortCode || '');
+        meta.sharedUrl = undefined;
+        meta.sharedBlobUrl = undefined;
+        meta.shareShortCode = undefined;
+        meta.sharedAt = undefined;
+        meta.shareExpiresAt = undefined;
+        meta.updatedAt = Date.now();
+        await cacheMeta(meta);
+        await uploadMeta(meta);
+        updateShareButton(meta);
+        showToast('Share link removed');
+        close();
+      } catch (err) {
+        console.error('Failed to unshare:', err);
+        showToast('Failed to remove share link', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Unshare';
+      }
+    });
+  } else {
+    // Not shared — show share form with expiration picker
+    overlay.innerHTML = `
+      <div class="modal-dialog modal-sm">
+        <div class="modal-header">
+          <h2>📤 Share Article</h2>
+          <button class="modal-close" id="shareModalClose" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="share-description">Share this article with a public link. Anyone with the link can view it.</p>
+          <div class="settings-field">
+            <label for="shareExpiration">Expires</label>
+            <select id="shareExpiration">
+              <option value="0">Never</option>
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="settings-btn settings-btn-secondary" id="shareCancelBtn">Cancel</button>
+          <button class="settings-btn settings-btn-primary" id="shareConfirmBtn">📤 Share</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    document.getElementById('shareModalClose')!.addEventListener('click', close);
+    document.getElementById('shareCancelBtn')!.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    document.getElementById('shareConfirmBtn')!.addEventListener('click', async () => {
+      const confirmBtn = document.getElementById('shareConfirmBtn') as HTMLButtonElement;
+      const cancelBtn = document.getElementById('shareCancelBtn') as HTMLButtonElement;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Sharing…';
+      cancelBtn.style.display = 'none';
+
+      // Check sharing is configured
+      const config = await getEffectiveSharingConfig();
+      if (!config) {
+        showToast('Set up sharing in Settings first', 'error');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '📤 Share';
+        cancelBtn.style.display = '';
+        return;
+      }
+
+      // Get article HTML
+      let html = await getCachedHtml(meta.id);
+      if (!html) {
+        try {
+          html = await downloadArticleHtml(meta.id);
+        } catch {
+          showToast('Failed to load article for sharing', 'error');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = '📤 Share';
+          cancelBtn.style.display = '';
+          return;
+        }
+      }
+
+      const expirationDays = parseInt((document.getElementById('shareExpiration') as HTMLSelectElement).value);
+      const expiresAt = expirationDays > 0 ? Date.now() + expirationDays * 24 * 60 * 60 * 1000 : undefined;
+
+      try {
+        const result = await shareArticle(meta.id, html, meta.title, expiresAt);
+
+        // Update meta
+        meta.sharedUrl = result.shareUrl;
+        meta.sharedBlobUrl = result.blobUrl;
+        meta.shareShortCode = result.shortCode;
+        meta.sharedAt = Date.now();
+        meta.shareExpiresAt = expiresAt;
+        meta.updatedAt = Date.now();
+        await cacheMeta(meta);
+        await uploadMeta(meta);
+        updateShareButton(meta);
+
+        // Transform dialog to show the URL with copy button
+        const body = document.getElementById('shareModal')!.querySelector('.modal-body')!;
+        body.innerHTML = `
+          <p>Article shared successfully!</p>
+          <div class="share-url-row">
+            <input type="text" class="share-url-input" id="shareUrlDisplay" value="${escapeHtml(result.shareUrl)}" readonly>
+            <button class="settings-btn settings-btn-secondary share-copy-inline" id="shareCopyInline" title="Copy to clipboard">📋</button>
+          </div>
+        `;
+
+        // Update header
+        const header = document.getElementById('shareModal')!.querySelector('.modal-header h2')!;
+        header.textContent = '🔗 Shared!';
+
+        // Replace footer with copy-to-close button
+        const footer = document.getElementById('shareModal')!.querySelector('.modal-footer')!;
+        footer.innerHTML = `
+          <button class="settings-btn settings-btn-primary" id="shareCopyCloseBtn">📋 Copy URL</button>
+        `;
+
+        // Inline copy
+        document.getElementById('shareCopyInline')!.addEventListener('click', () => {
+          navigator.clipboard.writeText(result.shareUrl).then(() => {
+            const btn = document.getElementById('shareCopyInline')!;
+            btn.textContent = '✓';
+            setTimeout(() => { btn.textContent = '📋'; }, 2000);
+          });
+        });
+
+        // Copy & close
+        document.getElementById('shareCopyCloseBtn')!.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(result.shareUrl);
+          showToast('Share link copied!');
+          overlay.remove();
+        });
+      } catch (err) {
+        console.error('Failed to share article:', err);
+        showToast(err instanceof Error ? err.message : 'Failed to share article', 'error');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '📤 Share';
+        cancelBtn.style.display = '';
+        updateShareButton(meta);
+      }
+    });
+  }
+}
+
+function updateShareButton(meta: OneDriveArticleMeta): void {
+  const shareBtn = document.getElementById('shareBtn');
+  if (!shareBtn) return;
+  shareBtn.classList.remove('sharing');
+  const icon = shareBtn.querySelector('.share-icon') as HTMLElement;
+  if (icon) icon.textContent = meta.sharedUrl ? '🔗' : '📤';
+  shareBtn.classList.toggle('active', !!meta.sharedUrl);
+  shareBtn.title = meta.sharedUrl ? 'Manage share link' : 'Share article';
 }
 
 function showReaderState(state: 'placeholder' | 'loading' | 'content' | 'error' | 'progress', errorMsg?: string): void {
@@ -954,6 +1197,64 @@ function fixAnchorLinks(frame: HTMLIFrameElement): void {
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener');
     });
+  } catch {
+    // Cross-origin — ignore
+  }
+}
+
+/**
+ * Fix elements inside the article iframe that block mousewheel scrolling.
+ *
+ * Many modern sites wrap content in `overflow: hidden` containers
+ * (e.g. `#root`, `.page-wrapper`). This walks the DOM tree from `<body>`
+ * down through single-child wrapper chains (the typical "app shell" pattern)
+ * and clears overflow constraints.
+ *
+ * When changing overflow, we must avoid creating "scroll traps" — elements
+ * with `overflow: auto` but no actual overflow (scrollH == clientH) absorb
+ * wheel events without scrolling and prevent propagation to the real scroll
+ * container. So we use `visible` (which lets events pass through) unless
+ * the element genuinely has scrollable overflow.
+ */
+function fixScrollBlocking(frame: HTMLIFrameElement): void {
+  try {
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) return;
+
+    // Walk from body through single-child-element wrappers
+    let node: HTMLElement | null = doc.body;
+    let depth = 0;
+    while (node && depth < 6) {
+      const style = getComputedStyle(node);
+
+      if (style.overflowY === 'hidden' || style.overflowY === 'clip') {
+        // If the element has real scrollable overflow, make it a scroll
+        // container. Otherwise use 'visible' to let events pass through.
+        const hasOverflow = node.scrollHeight > node.clientHeight + 1;
+        node.style.setProperty('overflow-y', hasOverflow ? 'auto' : 'visible', 'important');
+        // overflow-x must also be set to visible to avoid the CSS spec rule
+        // that forces the other axis from visible → auto.
+        if (!hasOverflow) {
+          node.style.setProperty('overflow-x', 'visible', 'important');
+        }
+      }
+
+      // Only descend into single-element children (the wrapper pattern);
+      // if there are multiple children this is real content, stop.
+      const visibleChildren: HTMLElement[] = [];
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child instanceof HTMLElement && getComputedStyle(child).display !== 'none') {
+          visibleChildren.push(child);
+        }
+      }
+      if (visibleChildren.length === 1) {
+        node = visibleChildren[0];
+        depth++;
+      } else {
+        break;
+      }
+    }
   } catch {
     // Cross-origin — ignore
   }

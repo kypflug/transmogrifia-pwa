@@ -6,13 +6,22 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Share dialog** — Replaced the `prompt()`-based share interaction with a proper modal dialog matching the Add URL modal's visual style. New share: shows an expiration picker (Never / 7 / 30 / 90 days, default 30), stays open during upload with a "Sharing…" spinner, then transforms to show the generated URL with a "Copy URL" button. Already shared: shows the current link in an inline-copyable field along with Unshare and "Copy URL" buttons.
+- **Original article icon** — Changed the "Open original article" button icon from 🔗 to 🌐 to distinguish it from the share link icon
+
 ### Added
 
+- **Article sharing** — Share button in the article header lets you create a public link (`transmogrifia.app/shared/{code}`) that anyone can view without signing in. Uses BYOS (Bring Your Own Storage) with Azure Blob Storage configured in the extension’s Settings. Creates a 30-day link, copies to clipboard, and syncs share status to OneDrive. Click again to copy the existing link or unshare.
+- **Shared article viewer** — New `/shared/{code}` route bypasses the auth gate and renders shared articles in a branded viewer shell. Resolves short codes via the cloud API, fetches HTML from the user’s blob storage, and displays in a sandboxed iframe. Includes error state for expired/removed links.
+- **Blob storage service** (`blob-storage.ts`) — Handles blob upload/delete and short link registration for sharing from the PWA
 - **Window Controls Overlay** — Added `display_override: ["window-controls-overlay"]` to the PWA manifest so the installed app suppresses the default titlebar on Windows. Sidebar header, article header, and settings header act as draggable title bar regions with interactive controls excluded. Titlebar-area env vars keep content clear of the window controls.
 
 ### Fixed
 
 - **iOS safe-area insets on all views** — Applied `env(safe-area-inset-*)` padding to settings header/content, library sidebar header/footer, sign-in screen, and mobile reading pane so UI controls clear the home indicator on notched/Dynamic Island iPhones
+- **Mousewheel scroll blocked on some articles** — Articles from sites with `overflow: hidden` on wrapper elements would trap mousewheel events. Root cause: per CSS spec, setting `overflow-x: hidden` on body forces `overflow-y` from `visible` to `auto`; if body has no real overflow (`scrollH == clientH`), it absorbs wheel events without scrolling and never propagates them to `<html>` (the actual scroll container). Fix: injected CSS now puts `overflow-x: hidden` only on `<html>` and forces `body { overflow: visible !important }` to prevent it from becoming a scroll trap. `fixScrollBlocking` DOM walk also checks for real overflow (`scrollH > clientH`) and uses `visible` instead of `auto` on wrapper divs that have no scrollable content
 
 ---
 

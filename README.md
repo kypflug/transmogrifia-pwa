@@ -16,6 +16,7 @@ A Progressive Web App for reading your [Transmogrifier](https://github.com/kypfl
 - **Themes** — Light, dark, and sepia modes with system-auto detection
 - **Responsive layout** — Two-pane on desktop/tablet, single-pane with swipe gestures on mobile
 - **Keyboard shortcuts** — `j`/`k` navigate, `f` favorite, `/` search, `Escape` back
+- **Share articles** — Create public URLs for articles that anyone can view without signing in
 - **Installable** — Add to your home screen on any platform via the browser's install prompt
 - **Delta sync** — Incremental syncing via Microsoft Graph delta API for fast refreshes
 - **Delete articles** — Remove articles from OneDrive directly from the reader
@@ -83,6 +84,7 @@ src/
     auth.ts            # MSAL wrapper (sign-in, sign-out, token acquisition)
     graph.ts           # Microsoft Graph API calls (list, download, upload, delete, settings sync)
     cache.ts           # IndexedDB article cache (metadata + HTML + settings)
+    blob-storage.ts    # BYOS blob upload + short link registration for sharing
     preferences.ts     # localStorage preferences (sort, filter, theme, sidebar width)
     settings.ts        # Encrypted settings management (device-key + passphrase sync)
     crypto.ts          # AES-256-GCM encryption (passphrase and device-key modes)
@@ -92,6 +94,7 @@ src/
     sign-in.ts         # Sign-in screen
     library.ts         # Two-pane library: article list + reader + Add URL modal
     settings.ts        # Settings UI (AI/image providers, cloud URL, sync passphrase)
+    shared-viewer.ts   # Public shared article viewer (no auth required)
   components/
     article-list.ts    # Render/filter/sort article list items
     article-header.ts  # Reader header bar (title, actions)

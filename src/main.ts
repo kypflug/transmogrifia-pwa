@@ -2,6 +2,7 @@ import { initAuth, isSignedIn } from './services/auth';
 import { renderSignIn } from './screens/sign-in';
 import { renderLibrary, showAddUrlModal } from './screens/library';
 import { renderSettings } from './screens/settings';
+import { renderSharedViewer } from './screens/shared-viewer';
 import { checkQueuePrereqs } from './services/cloud-queue';
 import { showToast } from './components/toast';
 import { applyTheme } from './theme';
@@ -55,6 +56,13 @@ boot(app).catch(err => {
 async function boot(app: HTMLElement): Promise<void> {
   // Apply saved theme immediately
   applyTheme();
+
+  // Shared article viewer — bypass auth entirely
+  const sharedMatch = location.pathname.match(/^\/shared\/([A-Za-z0-9]{6,20})$/);
+  if (sharedMatch) {
+    await renderSharedViewer(app, sharedMatch[1]);
+    return;
+  }
 
   // initAuth() returns a non-null AuthenticationResult when this page load
   // is the result of a loginRedirect completing. In that case the user is

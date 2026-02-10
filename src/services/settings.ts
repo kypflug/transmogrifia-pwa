@@ -86,6 +86,8 @@ export function getDefaultSettings(): TransmogrifierSettings {
     imageProvider: 'none',
     image: {},
     cloud: { apiUrl: '' },
+    sharingProvider: 'none',
+    sharing: {},
     updatedAt: 0,
   };
 }
@@ -262,6 +264,44 @@ export async function getEffectiveImageConfig(): Promise<{
   const provider = settings.imageProvider;
   if (provider === 'none') return null;
   return getImageProviderConfig(settings, provider);
+}
+
+/** Default cloud API URL (Azure Functions) */
+const DEFAULT_CLOUD_URL = 'https://transmogrifier-api.azurewebsites.net';
+
+/**
+ * Resolve the effective cloud API URL.
+ */
+export async function getEffectiveCloudUrl(): Promise<string> {
+  const settings = await loadSettings();
+  return settings.cloud.apiUrl || DEFAULT_CLOUD_URL;
+}
+
+/**
+ * Resolve the effective sharing config (BYOS).
+ * Returns null if sharing is disabled or not configured.
+ */
+export async function getEffectiveSharingConfig(): Promise<{
+  provider: 'azure-blob';
+  accountName: string;
+  containerName: string;
+  sasToken: string;
+} | null> {
+  const settings = await loadSettings();
+  if (!settings.sharingProvider || settings.sharingProvider === 'none') return null;
+
+  if (settings.sharingProvider === 'azure-blob') {
+    const c = settings.sharing?.azureBlob;
+    if (!c?.accountName || !c?.containerName || !c?.sasToken) return null;
+    return {
+      provider: 'azure-blob',
+      accountName: c.accountName,
+      containerName: c.containerName,
+      sasToken: c.sasToken,
+    };
+  }
+
+  return null;
 }
 
 // ─── Internal helpers ────────────────

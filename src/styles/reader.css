@@ -160,6 +160,16 @@
   border-color: #F2A900;
 }
 
+.share-btn.active {
+  color: var(--edge-blue);
+  border-color: var(--edge-blue);
+}
+
+.share-btn.sharing {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .del-btn:hover {
   color: var(--edge-red, #dc3545);
   border-color: var(--edge-red, #dc3545);

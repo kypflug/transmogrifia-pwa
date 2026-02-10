@@ -9,6 +9,12 @@ export interface OneDriveArticleMeta {
   updatedAt: number;    // epoch ms
   isFavorite: boolean;
   size: number;         // HTML size in bytes
+  // Sharing fields (optional)
+  sharedUrl?: string;
+  sharedBlobUrl?: string;
+  shareShortCode?: string;
+  sharedAt?: number;
+  shareExpiresAt?: number;
 }
 
 /** User profile from Microsoft Graph */
@@ -79,6 +85,18 @@ export interface CloudSettings {
   apiUrl: string;
 }
 
+/** Sharing storage provider */
+export type SharingProvider = 'none' | 'azure-blob';
+
+/** Per-provider sharing configuration */
+export interface SharingProviderSettings {
+  azureBlob?: {
+    accountName: string;
+    containerName: string;
+    sasToken: string;
+  };
+}
+
 /** Full settings object (encrypted at rest) */
 export interface TransmogrifierSettings {
   /** Schema version for future migrations */
@@ -93,6 +111,10 @@ export interface TransmogrifierSettings {
   image: ImageProviderSettings;
   /** Cloud processing settings */
   cloud: CloudSettings;
+  /** Active sharing storage provider */
+  sharingProvider: SharingProvider;
+  /** Per-provider sharing config */
+  sharing: SharingProviderSettings;
   /** When these settings were last updated (epoch ms) */
   updatedAt: number;
 }

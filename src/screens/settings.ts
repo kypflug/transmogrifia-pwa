@@ -17,7 +17,7 @@ import {
 } from '../services/settings';
 import { showToast } from '../components/toast';
 import { escapeHtml } from '../utils/storage';
-import type { TransmogrifierSettings, AIProvider, ImageProvider } from '../types';
+import type { TransmogrifierSettings, AIProvider, ImageProvider, SharingProvider } from '../types';
 
 export function renderSettings(root: HTMLElement): void {
   root.innerHTML = `
@@ -207,6 +207,47 @@ export function renderSettings(root: HTMLElement): void {
           </div>
         </section>
 
+        <!-- Article Sharing (BYOS) -->
+        <section class="settings-section" id="sharingSection">
+          <div class="settings-section-header">
+            <h2>🔗 Article Sharing</h2>
+            <span class="settings-badge" id="sharingBadge">Disabled</span>
+          </div>
+          <p class="settings-section-desc">
+            Share articles via public links. Bring Your Own Storage (BYOS) — articles are
+            uploaded to your Azure Blob Storage account. Short links are generated via the cloud API.
+          </p>
+
+          <div class="settings-field">
+            <label for="settingsSharingProvider">Storage Provider</label>
+            <select id="settingsSharingProvider">
+              <option value="none">None (disabled)</option>
+              <option value="azure-blob">Azure Blob Storage</option>
+            </select>
+          </div>
+
+          <!-- Azure Blob fields -->
+          <div class="settings-provider-fields hidden" id="sharingAzureBlobFields">
+            <div class="settings-field">
+              <label for="sharingAccountName">Account Name</label>
+              <input type="text" id="sharingAccountName" placeholder="mystorageaccount">
+            </div>
+            <div class="settings-field">
+              <label for="sharingContainerName">Container Name</label>
+              <input type="text" id="sharingContainerName" placeholder="shared-articles">
+            </div>
+            <div class="settings-field">
+              <label for="sharingSasToken">SAS Token</label>
+              <input type="password" id="sharingSasToken" placeholder="sv=2024-11-04&ss=b&srt=co&sp=rwdl…" autocomplete="off">
+            </div>
+            <p class="settings-section-desc" style="margin-top: 0.5rem; font-size: 0.8rem;">
+              Create a storage account → add a container with <strong>Blob</strong> public access level →
+              generate a SAS token (Blob service, Container+Object permissions, Read+Write+Delete, HTTPS only) →
+              add a CORS rule for <code>https://transmogrifia.app</code> (GET method).
+            </p>
+          </div>
+        </section>
+
         <!-- Sync Actions -->
         <section class="settings-section" id="syncSection">
           <div class="settings-section-header">
@@ -327,9 +368,16 @@ function populateForm(s: TransmogrifierSettings): void {
   val('imgGoogleKey', s.image.google?.apiKey ?? '');
   val('imgGoogleModel', s.image.google?.model ?? '');
 
+  // Sharing provider
+  val('settingsSharingProvider', s.sharingProvider ?? 'none');
+  val('sharingAccountName', s.sharing?.azureBlob?.accountName ?? '');
+  val('sharingContainerName', s.sharing?.azureBlob?.containerName ?? '');
+  val('sharingSasToken', s.sharing?.azureBlob?.sasToken ?? '');
+
   // Show correct provider fields
   showProviderFields('ai', s.aiProvider);
   showProviderFields('img', s.imageProvider);
+  showSharingFields(s.sharingProvider ?? 'none');
 }
 
 function updateBadges(s: TransmogrifierSettings): void {
@@ -348,6 +396,16 @@ function updateBadges(s: TransmogrifierSettings): void {
     const imgConfigured = hasImageKey(s);
     imageBadge.textContent = imgConfigured ? getProviderName(s.imageProvider) : 'Not configured';
     imageBadge.className = `settings-badge ${imgConfigured ? 'configured' : ''}`;
+  }
+
+  // Sharing badge
+  const sharingBadge = document.getElementById('sharingBadge')!;
+  if (s.sharingProvider === 'azure-blob' && s.sharing?.azureBlob?.accountName) {
+    sharingBadge.textContent = 'Azure Blob';
+    sharingBadge.className = 'settings-badge configured';
+  } else {
+    sharingBadge.textContent = 'Disabled';
+    sharingBadge.className = 'settings-badge';
   }
 
   // Sync badge
@@ -450,6 +508,16 @@ function setupProviderSwitching(): void {
   imgSelect.addEventListener('change', () => {
     showProviderFields('img', imgSelect.value as ImageProvider);
   });
+
+  const sharingSelect = document.getElementById('settingsSharingProvider') as HTMLSelectElement;
+  sharingSelect.addEventListener('change', () => {
+    showSharingFields(sharingSelect.value as SharingProvider);
+  });
+}
+
+function showSharingFields(provider: SharingProvider): void {
+  const fields = document.getElementById('sharingAzureBlobFields');
+  if (fields) fields.classList.toggle('hidden', provider !== 'azure-blob');
 }
 
 function showProviderFields(prefix: 'ai' | 'img', provider: string): void {
@@ -469,7 +537,7 @@ function showProviderFields(prefix: 'ai' | 'img', provider: string): void {
 function setupSaveOnChange(): void {
   // Auto-save on blur for all inputs in settings sections
   const inputs = document.querySelectorAll(
-    '#aiSection input, #aiSection select, #imageSection input, #imageSection select'
+    '#aiSection input, #aiSection select, #imageSection input, #imageSection select, #sharingSection input, #sharingSection select'
   );
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -622,6 +690,14 @@ function collectSettings(): TransmogrifierSettings {
       },
     },
     cloud: { apiUrl: '' },
+    sharingProvider: (val('settingsSharingProvider') || 'none') as SharingProvider,
+    sharing: {
+      azureBlob: {
+        accountName: val('sharingAccountName'),
+        containerName: val('sharingContainerName'),
+        sasToken: val('sharingSasToken'),
+      },
+    },
     updatedAt: 0, // Will be set by saveSettings()
   };
 }
