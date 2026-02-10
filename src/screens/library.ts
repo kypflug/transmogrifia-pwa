@@ -67,7 +67,10 @@ export function renderLibrary(root: HTMLElement): void {
           <div class="sidebar-header-actions">
             <button class="add-url-btn" id="addUrlBtn" title="Add a URL to transmogrify">+ Add</button>
             <button class="sync-btn" id="syncBtn" title="Sync articles">
-              <span class="sync-icon" id="syncIcon">⟳</span>
+              <svg class="sync-icon" id="syncIcon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 8a6 6 0 1 1-1.5-4"/>
+                <path d="M14 3v4h-4"/>
+              </svg>
             </button>
             <div class="user-menu-wrapper">
               <button class="user-btn" id="userBtn" title="Account menu">
@@ -565,8 +568,6 @@ async function toggleFavorite(id: string): Promise<void> {
   // Update UI
   const favBtn = document.getElementById('favBtn');
   if (favBtn) {
-    const icon = favBtn.querySelector('.fav-icon');
-    if (icon) icon.textContent = meta.isFavorite ? '★' : '☆';
     favBtn.classList.toggle('active', meta.isFavorite);
   }
   renderList();
@@ -583,8 +584,6 @@ async function toggleFavorite(id: string): Promise<void> {
     meta.isFavorite = !meta.isFavorite;
     meta.updatedAt = Date.now();
     if (favBtn) {
-      const icon = favBtn.querySelector('.fav-icon');
-      if (icon) icon.textContent = meta.isFavorite ? '★' : '☆';
       favBtn.classList.toggle('active', meta.isFavorite);
     }
     renderList();

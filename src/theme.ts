@@ -17,9 +17,9 @@ export function applyTheme(theme?: Theme): void {
 
   if (theme) saveTheme(theme);
 
-  // Update meta theme-color
+  // Update meta theme-color to match surface color
   const colors: Record<string, string> = {
-    light: '#0078D4',
+    light: '#FAFAFA',
     dark: '#1B1B1F',
     sepia: '#F4ECD8',
   };

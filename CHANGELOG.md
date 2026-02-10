@@ -14,6 +14,9 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 - **Shared viewer chrome bar** — Removed "Open App" CTA button; replaced it with a 🌐 globe button that links to the original article URL
 - **Share metadata stored at share time** — Description, original URL, and hero image are now extracted from the article HTML when sharing and sent to the cloud API with the short link registration. The SSR function and shared viewer consume this pre-computed metadata instead of re-fetching and parsing the article HTML on every view.
+- **Theme color matches app surface** — Browser title bar now uses the page surface color (`#FAFAFA` light, `#1B1B1F` dark, `#F4ECD8` sepia) instead of blue accent, for a cohesive look
+- **Favorite star visibility** — Changed from empty/filled star glyphs (`☆`/`★`) to always-filled star with opacity styling. More legible in dark mode.
+- **Sync button border** — Added border to the sync/refresh button in the sidebar header, matching the style of action buttons in the reader pane
 
 ### Fixed
 

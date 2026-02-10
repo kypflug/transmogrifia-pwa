@@ -34,7 +34,7 @@ export function renderArticleItem(
   const recipe = getRecipe(meta.recipeId);
   const icon = recipe?.icon ?? '📄';
   const recipeName = recipe?.name ?? meta.recipeName ?? 'Article';
-  const star = meta.isFavorite ? '<span class="fav-star active">★</span>' : '<span class="fav-star">☆</span>';
+  const star = meta.isFavorite ? '<span class="fav-star active">★</span>' : '<span class="fav-star">★</span>';
   const cloudBadge = isCached ? '' : '<span class="cloud-badge" title="Not downloaded">☁️</span>';
   const sharedBadge = meta.shareShortCode ? '<span class="shared-badge" title="Shared">🔗</span>' : '';
   const activeClass = isActive ? ' active' : '';

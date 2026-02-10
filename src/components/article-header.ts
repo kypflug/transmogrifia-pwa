@@ -17,7 +17,7 @@ export function renderArticleHeader(
     year: 'numeric',
   });
   const hostname = getHostname(meta.originalUrl);
-  const favIcon = meta.isFavorite ? '★' : '☆';
+  const favIcon = '★';
   const favClass = meta.isFavorite ? ' active' : '';
   const shareIcon = meta.sharedUrl ? '🔗' : '📤';
   const shareClass = meta.sharedUrl ? ' active' : '';
