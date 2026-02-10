@@ -9,6 +9,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Fixed
 
 - **iOS safe-area insets on all views** — Applied `env(safe-area-inset-*)` padding to settings header/content, library sidebar header/footer, sign-in screen, and mobile reading pane so UI controls clear the home indicator on notched/Dynamic Island iPhones
+- **Lingering focus after mobile back navigation** — Blur active element after tapping the back arrow so article items under the tap point don't pick up focus
 
 ---
 

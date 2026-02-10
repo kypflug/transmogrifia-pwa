@@ -469,6 +469,8 @@ function goBack(): void {
   selectedPendingId = null;
   renderList();
   showReaderState('placeholder');
+  // Prevent lingering focus on article items after mobile back transition
+  (document.activeElement as HTMLElement | null)?.blur();
 }
 
 function updateFabState(id: string): void {
