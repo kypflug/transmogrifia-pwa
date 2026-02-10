@@ -395,15 +395,29 @@ body.is-offline .offline-banner {
 @media (display-mode: window-controls-overlay) {
   /* Sidebar header: match titlebar height, leave room for controls on right */
   .sidebar-header {
-    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 8px);
     min-height: env(titlebar-area-height, auto);
   }
 
   /* Article header in the reading pane: clear window controls on the right */
   .article-header {
     padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
-    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 8px);
     min-height: env(titlebar-area-height, auto);
+  }
+
+  /* Reading pane itself is draggable when no article header is visible */
+  .reading-pane {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  /* Exclude interactive children inside the reading pane from drag */
+  .reading-pane button,
+  .reading-pane a,
+  .reading-pane iframe {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
   }
 
   /* Reader placeholder also clears the titlebar area */
@@ -413,7 +427,7 @@ body.is-offline .offline-banner {
 
   /* Settings header spans full width, needs right inset for controls */
   .settings-header {
-    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 8px);
     padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 24px);
     min-height: env(titlebar-area-height, auto);
   }
