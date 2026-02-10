@@ -36,6 +36,7 @@ export function renderArticleItem(
   const recipeName = recipe?.name ?? meta.recipeName ?? 'Article';
   const star = meta.isFavorite ? '<span class="fav-star active">★</span>' : '<span class="fav-star">☆</span>';
   const cloudBadge = isCached ? '' : '<span class="cloud-badge" title="Not downloaded">☁️</span>';
+  const sharedBadge = meta.shareShortCode ? '<span class="shared-badge" title="Shared">🔗</span>' : '';
   const activeClass = isActive ? ' active' : '';
 
   return `
@@ -47,7 +48,7 @@ export function renderArticleItem(
       <div class="article-item-bottom">
         <span class="article-recipe">${icon} ${escapeHtml(recipeName)}</span>
         <span class="article-date">${relativeDate(meta.createdAt)}</span>
-        ${cloudBadge}
+        ${cloudBadge}${sharedBadge}
       </div>
     </div>
   `;

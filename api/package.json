@@ -2,7 +2,7 @@
   "name": "transmogrifia-pwa-api",
   "version": "1.0.0",
   "private": true,
-  "main": "shared/index.ts",
+  "main": "dist/shared-meta/index.js",
   "scripts": {
     "build": "tsc",
     "start": "func start"

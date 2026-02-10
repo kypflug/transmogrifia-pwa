@@ -334,6 +334,15 @@
   margin-left: auto;
 }
 
+.shared-badge {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.cloud-badge + .shared-badge {
+  margin-left: 0;
+}
+
 /* ===== Pending Job Items ===== */
 .article-item-pending {
   padding: 12px 16px;

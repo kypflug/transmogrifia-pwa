@@ -49,13 +49,13 @@ export function renderSettings(root: HTMLElement): void {
           <div class="settings-field">
             <label for="settingsPassphrase">Passphrase</label>
             <div class="settings-input-action">
-              <input type="password" id="settingsPassphrase" placeholder="Enter a strong passphrase…" autocomplete="off">
+              <input type="password" id="settingsPassphrase" name="passphrase" placeholder="Enter a strong passphrase…" autocomplete="current-password">
               <button class="settings-input-action-btn" id="togglePassphraseVis" title="Show/hide">👁️</button>
             </div>
           </div>
           <div class="settings-field">
             <label for="settingsPassphraseConfirm">Confirm Passphrase</label>
-            <input type="password" id="settingsPassphraseConfirm" placeholder="Confirm passphrase…" autocomplete="off">
+            <input type="password" id="settingsPassphraseConfirm" name="passphrase-confirm" placeholder="Confirm passphrase…" autocomplete="current-password">
           </div>
           <div class="settings-actions">
             <button class="settings-btn settings-btn-primary" id="setPassphraseBtn">Set Passphrase</button>

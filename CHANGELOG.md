@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [1.1.0] — 2026-02-10
 
+### Added
+
+- **Shared badge in article list** — Articles with a share link now show a 🔗 chain icon in the reading list, next to the cloud badge (if present)
+
 ### Changed
 
 - **Shared viewer chrome bar** — Removed "Open App" CTA button; replaced it with a 🌐 globe button that links to the original article URL
@@ -13,6 +17,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Fixed
 
+- **Password manager autofill on passphrase field** — Added `name` and `autocomplete="current-password"` attributes to the sync passphrase inputs so 1Password and other password managers recognize the fields
 - **Missing globe button & meta previews on shared pages** — Cloud API (`POST /api/share`) was not persisting `description`, `originalUrl`, and `image` fields, and `GET /api/s/{code}` was not returning them. Fixed in transmogrify-ext cloud functions. Existing shares will still lack these fields until re-shared.
 
 ### Added

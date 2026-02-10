@@ -16,7 +16,7 @@
  * no self-fetch of index.html.
  */
 
-import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app, type HttpRequest, type HttpResponseInit, type InvocationContext } from '@azure/functions';
 
 const CLOUD_API = 'https://transmogrifier-api.azurewebsites.net';
 
@@ -119,7 +119,7 @@ function buildPage(opts: {
 </html>`;
 }
 
-export default async function handler(
+async function handler(
   req: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
@@ -158,3 +158,10 @@ export default async function handler(
     }),
   };
 }
+
+app.http('shared-meta', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'shared-meta',
+  handler,
+});
