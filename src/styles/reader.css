@@ -74,6 +74,14 @@
   border-bottom: 1px solid var(--edge-border-subtle);
   background: var(--edge-surface-raised);
   flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.article-header button,
+.article-header a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .mobile-back {

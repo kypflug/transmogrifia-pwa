@@ -320,3 +320,31 @@ body.is-offline .offline-banner {
   color: var(--edge-text-secondary);
   margin-top: 2px;
 }
+
+/* ===== Window Controls Overlay ===== */
+@media (display-mode: window-controls-overlay) {
+  /* Sidebar header: match titlebar height, leave room for controls on right */
+  .sidebar-header {
+    padding-top: env(titlebar-area-y, 0px);
+    min-height: env(titlebar-area-height, auto);
+  }
+
+  /* Article header in the reading pane: clear window controls on the right */
+  .article-header {
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+    padding-top: env(titlebar-area-y, 0px);
+    min-height: env(titlebar-area-height, auto);
+  }
+
+  /* Reader placeholder also clears the titlebar area */
+  .reader-placeholder {
+    padding-top: env(titlebar-area-height, 0px);
+  }
+
+  /* Settings header spans full width, needs right inset for controls */
+  .settings-header {
+    padding-top: env(titlebar-area-y, 0px);
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 24px);
+    min-height: env(titlebar-area-height, auto);
+  }
+}

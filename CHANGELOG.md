@@ -6,10 +6,13 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Window Controls Overlay** — Added `display_override: ["window-controls-overlay"]` to the PWA manifest so the installed app suppresses the default titlebar on Windows. Sidebar header, article header, and settings header act as draggable title bar regions with interactive controls excluded. Titlebar-area env vars keep content clear of the window controls.
+
 ### Fixed
 
 - **iOS safe-area insets on all views** — Applied `env(safe-area-inset-*)` padding to settings header/content, library sidebar header/footer, sign-in screen, and mobile reading pane so UI controls clear the home indicator on notched/Dynamic Island iPhones
-- **Lingering focus after mobile back navigation** — Blur active element after tapping the back arrow so article items under the tap point don't pick up focus
 
 ---
 

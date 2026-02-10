@@ -25,6 +25,16 @@
   padding-left: calc(16px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--edge-border-subtle);
   flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.sidebar-header button,
+.sidebar-header input,
+.sidebar-header select,
+.sidebar-header a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .sidebar-brand {

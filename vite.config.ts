@@ -22,6 +22,7 @@ export default defineConfig({
         theme_color: '#0078D4',
         background_color: '#FAFAFA',
         display: 'standalone',
+        display_override: ['window-controls-overlay'],
         start_url: '/',
         orientation: 'any',
         categories: ['productivity', 'education'],

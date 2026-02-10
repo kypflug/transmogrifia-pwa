@@ -22,6 +22,14 @@
   background: linear-gradient(135deg, #0078D4 0%, #038387 100%);
   color: white;
   flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.settings-header button,
+.settings-header a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .settings-header-left {
