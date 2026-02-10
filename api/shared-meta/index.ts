@@ -8,12 +8,13 @@
  * How it works:
  *  1. SWA routes /shared/* → /api/shared-meta (see staticwebapp.config.json)
  *  2. This function extracts the share code from x-ms-original-url
- *  3. Resolves the code via the cloud API — now returns title, description,
+ *  3. Resolves the code via the cloud API — returns title, description,
  *     image, and originalUrl (stored at share-creation time)
- *  4. Returns an HTML page with OG tags + the SPA bootstrap script
+ *  4. Fetches the production index.html and injects OG tags + updated title
+ *     so the SPA boots normally with correct asset hashes
  *
- * Only ONE outbound fetch (the resolve call). No article HTML download,
- * no self-fetch of index.html.
+ * Two outbound fetches: one to resolve the share code, one to get index.html.
+ * The index.html fetch is cached in memory to avoid repeated requests.
  */
 
 import { app, type HttpRequest, type HttpResponseInit, type InvocationContext } from '@azure/functions';
@@ -29,11 +30,20 @@ interface ResolvedShare {
   image?: string;
 }
 
+/** Cached index.html content (stays in memory for the function instance). */
+let cachedIndexHtml: string | null = null;
+
 /** Extract the short code from the original request URL. */
 function extractCode(req: HttpRequest): string | null {
   const originalUrl = req.headers.get('x-ms-original-url') || req.url;
   const match = originalUrl.match(/\/shared\/([A-Za-z0-9]{6,20})(?:[?#]|$)/);
   return match?.[1] ?? null;
+}
+
+/** Get the origin from the request (for fetching index.html). */
+function getOrigin(req: HttpRequest): string {
+  const originalUrl = req.headers.get('x-ms-original-url') || req.url;
+  return new URL(originalUrl).origin;
 }
 
 /** Resolve a share short code via the cloud API. */
@@ -42,6 +52,22 @@ async function resolveShareCode(code: string): Promise<ResolvedShare | null> {
     const res = await fetch(`${CLOUD_API}/api/s/${code}`);
     if (!res.ok) return null;
     return (await res.json()) as ResolvedShare;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the production index.html from the SWA origin.
+ * Cached in memory — the HTML only changes on deploy (which restarts the function).
+ */
+async function getIndexHtml(origin: string): Promise<string | null> {
+  if (cachedIndexHtml) return cachedIndexHtml;
+  try {
+    const res = await fetch(`${origin}/index.html`);
+    if (!res.ok) return null;
+    cachedIndexHtml = await res.text();
+    return cachedIndexHtml;
   } catch {
     return null;
   }
@@ -58,27 +84,21 @@ function escapeAttr(s: string): string {
 const DEFAULT_DESC = 'A transmogrified article — beautiful web content, reimagined.';
 
 /**
- * Build the full HTML page.
- *
- * Uses a self-contained inline template rather than fetching the app's
- * index.html — avoids an extra network round-trip and the index.html
- * changes rarely enough that keeping this in sync is trivial.
- *
- * The SPA's main.ts boots normally and renders the shared viewer.
+ * Inject OG meta tags and update the <title> in the production index.html.
+ * Falls back to returning index.html unmodified if no share metadata.
  */
-function buildPage(opts: {
-  title?: string;
-  description?: string;
-  image?: string;
-  pageUrl?: string;
-}): string {
-  const title = opts.title ?? 'Library of Transmogrifia';
+function injectMetaTags(
+  html: string,
+  opts: { title?: string; description?: string; image?: string; pageUrl?: string },
+): string {
+  if (!opts.title) return html;
+
+  const title = opts.title;
   const desc = opts.description ?? DEFAULT_DESC;
   const pageUrl = opts.pageUrl ?? '';
   const twitterCard = opts.image ? 'summary_large_image' : 'summary';
 
-  const ogBlock = opts.title
-    ? `
+  const ogTags = `
     <!-- Social media preview (SSR-injected) -->
     <meta property="og:title" content="${escapeAttr(title)}">
     <meta property="og:description" content="${escapeAttr(desc)}">
@@ -91,32 +111,24 @@ function buildPage(opts: {
     }
     <meta name="twitter:card" content="${twitterCard}">
     <meta name="twitter:title" content="${escapeAttr(title)}">
-    <meta name="twitter:description" content="${escapeAttr(desc)}">`
-    : '';
+    <meta name="twitter:description" content="${escapeAttr(desc)}">
+    <meta name="description" content="${escapeAttr(desc)}">`;
 
-  const displayTitle = opts.title ? `${escapeAttr(title)} — Library of Transmogrifia` : 'Library of Transmogrifia';
+  const displayTitle = `${escapeAttr(title)} — Library of Transmogrifia`;
 
-  // Keep in sync with index.html — only the meta tags and <title> differ
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0078D4">
-  <meta name="description" content="${escapeAttr(desc)}">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">${ogBlock}
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <title>${displayTitle}</title>
-  <link rel="stylesheet" href="/src/styles/global.css">
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
-</html>`;
+  // Inject OG tags before </head>
+  let result = html.replace('</head>', `${ogTags}\n</head>`);
+
+  // Replace <title>
+  result = result.replace(/<title>[^<]*<\/title>/, `<title>${displayTitle}</title>`);
+
+  // Replace meta description if one exists
+  result = result.replace(
+    /<meta name="description" content="[^"]*">/,
+    `<meta name="description" content="${escapeAttr(desc)}">`,
+  );
+
+  return result;
 }
 
 async function handler(
@@ -124,15 +136,24 @@ async function handler(
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
   const code = extractCode(req);
-  const originalUrl = req.headers.get('x-ms-original-url') || req.url;
-  const origin = new URL(originalUrl).origin;
+  const origin = getOrigin(req);
 
-  // Invalid code — serve plain page, SPA handles error state
+  // Fetch the production index.html (with correct asset hashes)
+  const indexHtml = await getIndexHtml(origin);
+  if (!indexHtml) {
+    // If we can't fetch index.html, redirect to the page and let SWA serve it
+    return {
+      status: 302,
+      headers: { Location: `${origin}/shared/${code || ''}` },
+    };
+  }
+
+  // No valid code — serve plain index.html, SPA handles error state
   if (!code) {
     return {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      body: buildPage({}),
+      body: indexHtml,
     };
   }
 
@@ -143,14 +164,14 @@ async function handler(
     return {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      body: buildPage({}),
+      body: indexHtml,
     };
   }
 
   return {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    body: buildPage({
+    body: injectMetaTags(indexHtml, {
       title: resolved.title,
       description: resolved.description,
       image: resolved.image,
