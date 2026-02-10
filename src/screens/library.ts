@@ -768,7 +768,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       const expiresAt = expirationDays > 0 ? Date.now() + expirationDays * 24 * 60 * 60 * 1000 : undefined;
 
       try {
-        const result = await shareArticle(meta.id, html, meta.title, expiresAt);
+        const result = await shareArticle(meta.id, html, meta.title, meta.originalUrl, expiresAt);
 
         // Update meta
         meta.sharedUrl = result.shareUrl;

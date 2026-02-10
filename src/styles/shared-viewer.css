@@ -42,20 +42,23 @@
   min-width: 0;
 }
 
-.shared-viewer-cta {
+.shared-viewer-orig-btn {
   flex-shrink: 0;
-  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
   border-radius: 6px;
-  background: var(--edge-blue);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 18px;
   text-decoration: none;
+  background: transparent;
   transition: background 0.15s;
+  cursor: pointer;
 }
 
-.shared-viewer-cta:hover {
-  background: var(--edge-blue-hover);
+.shared-viewer-orig-btn:hover {
+  background: var(--edge-surface-sunken);
 }
 
 /* ===== Loading State ===== */

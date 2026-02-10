@@ -1,6 +1,13 @@
 {
+  "routes": [
+    {
+      "route": "/shared/*",
+      "rewrite": "/api/shared-meta"
+    }
+  ],
   "navigationFallback": {
-    "rewrite": "/index.html"
+    "rewrite": "/index.html",
+    "exclude": ["/api/*"]
   },
   "globalHeaders": {
     "X-Content-Type-Options": "nosniff",

@@ -9,6 +9,45 @@
  */
 
 import { resolveShareCode } from '../services/blob-storage';
+import type { ResolvedShare } from '../services/blob-storage';
+
+/** Inject / update OG meta tags in the host document head. */
+function setDocumentMeta(title: string, description?: string, image?: string, url?: string): void {
+  const setMeta = (attr: string, key: string, content: string) => {
+    let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute(attr, key);
+      document.head.appendChild(el);
+    }
+    el.content = content;
+  };
+
+  const pageUrl = url || window.location.href;
+  const desc = description || 'A transmogrified article — beautiful web content, reimagined.';
+
+  // OpenGraph
+  setMeta('property', 'og:title', title);
+  setMeta('property', 'og:description', desc);
+  setMeta('property', 'og:url', pageUrl);
+  setMeta('property', 'og:type', 'article');
+  setMeta('property', 'og:site_name', 'Library of Transmogrifia');
+
+  // Twitter Card
+  setMeta('name', 'twitter:title', title);
+  setMeta('name', 'twitter:description', desc);
+
+  if (image) {
+    setMeta('property', 'og:image', image);
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:image', image);
+  } else {
+    setMeta('name', 'twitter:card', 'summary');
+  }
+
+  // Standard meta description
+  setMeta('name', 'description', desc);
+}
 
 /**
  * Render the shared article viewer into the given container.
@@ -41,11 +80,9 @@ export async function renderSharedViewer(
   `;
 
   try {
-    // 1. Resolve the short code to a blob URL
-    const { url, title } = await resolveShareCode(shortCode);
-
-    // Update page title
-    document.title = `${title} — Library of Transmogrifia`;
+    // 1. Resolve the short code — returns title, blob URL, and preview metadata
+    const resolved: ResolvedShare = await resolveShareCode(shortCode);
+    const { url, title, description, originalUrl, image } = resolved;
 
     // 2. Fetch the article HTML from blob storage (public, no auth)
     const response = await fetch(url);
@@ -53,6 +90,10 @@ export async function renderSharedViewer(
       throw new Error(`Failed to load article (${response.status})`);
     }
     const html = await response.text();
+
+    // Update page title & social meta tags (client-side fallback)
+    document.title = `${title} — Library of Transmogrifia`;
+    setDocumentMeta(title, description, image);
 
     // 3. Render in sandboxed iframe
     const loading = document.getElementById('sharedLoading');
@@ -85,18 +126,19 @@ export async function renderSharedViewer(
       }
     });
 
-    // Update the chrome bar with title and original link info
+    // Update the chrome bar with title and original URL globe button
     const chrome = container.querySelector('.shared-viewer-chrome');
     if (chrome) {
+      const globeBtn = originalUrl
+        ? `<a class="shared-viewer-orig-btn" href="${escapeAttr(originalUrl)}" target="_blank" rel="noopener" title="Open original article">🌐</a>`
+        : '';
       chrome.innerHTML = `
         <div class="shared-viewer-brand">
           <img src="/icons/icon-64.png" alt="" width="24" height="24">
           <span>Library of Transmogrifia</span>
         </div>
         <div class="shared-viewer-title">${escapeHtml(title)}</div>
-        <a class="shared-viewer-cta" href="/" title="Get the app">
-          Open App
-        </a>
+        ${globeBtn}
       `;
     }
   } catch (err) {
@@ -124,4 +166,8 @@ function escapeHtml(text: string): string {
   const el = document.createElement('span');
   el.textContent = text;
   return el.innerHTML;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

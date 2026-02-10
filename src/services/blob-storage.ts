@@ -42,31 +42,26 @@ function getBlobUrlWithSas(config: AzureBlobConfig, articleId: string): string {
 }
 
 /**
- * Inject OpenGraph meta tags into the article HTML for social media previews.
+ * Extract metadata from article HTML for social media preview cards.
+ * Runs at share-time so the data is stored with the short link.
  */
-function injectOGTags(html: string, title: string, shareUrl: string): string {
-  const description = 'A transmogrified article — beautiful web content, reimagined.';
+function extractShareMeta(html: string): { description: string; image?: string } {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
 
-  const ogTags = `
-    <meta property="og:title" content="${escapeAttr(title)}">
-    <meta property="og:description" content="${escapeAttr(description)}">
-    <meta property="og:url" content="${escapeAttr(shareUrl)}">
-    <meta property="og:type" content="article">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="${escapeAttr(title)}">
-    <meta name="twitter:description" content="${escapeAttr(description)}">
-  `;
+  // Description: og:description > meta description > first <p> text
+  const ogDesc = (doc.querySelector('meta[property="og:description"]') as HTMLMetaElement | null)?.content;
+  const metaDesc = (doc.querySelector('meta[name="description"]') as HTMLMetaElement | null)?.content;
+  const firstP = doc.querySelector('p')?.textContent?.trim();
+  const rawDesc = ogDesc || metaDesc || firstP || '';
+  const description = (rawDesc || 'A transmogrified article — beautiful web content, reimagined.').slice(0, 200);
 
-  if (html.includes('</head>')) {
-    return html.replace('</head>', `${ogTags}</head>`);
-  } else if (html.includes('<head>')) {
-    return html.replace('<head>', `<head>${ogTags}`);
-  }
-  return ogTags + html;
-}
+  // Image: og:image > first <img> with an http(s) src
+  const ogImg = (doc.querySelector('meta[property="og:image"]') as HTMLMetaElement | null)?.content;
+  const firstImg = doc.querySelector('img[src^="http"]') as HTMLImageElement | null;
+  const image = ogImg || firstImg?.src || undefined;
 
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return { description, image };
 }
 
 /**
@@ -119,6 +114,13 @@ async function deleteFromBlob(
   }
 }
 
+/** Metadata sent along with short link registration for SSR preview cards. */
+interface ShareMeta {
+  description: string;
+  originalUrl: string;
+  image?: string;
+}
+
 /**
  * Register a short link via the cloud function.
  */
@@ -127,6 +129,7 @@ async function registerShortLink(
   title: string,
   accessToken: string,
   cloudUrl: string,
+  meta: ShareMeta,
   expiresAt?: number,
 ): Promise<{ shortCode: string; shareUrl: string }> {
   const response = await fetch(`${cloudUrl}/api/share`, {
@@ -136,6 +139,9 @@ async function registerShortLink(
       blobUrl,
       title,
       accessToken,
+      description: meta.description,
+      originalUrl: meta.originalUrl,
+      ...(meta.image ? { image: meta.image } : {}),
       ...(expiresAt ? { expiresAt } : {}),
     }),
   });
@@ -177,6 +183,7 @@ export async function shareArticle(
   articleId: string,
   html: string,
   title: string,
+  originalUrl: string,
   expiresAt?: number,
 ): Promise<ShareResult> {
   const config = await getEffectiveSharingConfig();
@@ -191,17 +198,19 @@ export async function shareArticle(
 
   const cloudUrl = await getEffectiveCloudUrl();
 
-  // 1. Inject OG tags and upload to blob
-  const shareUrlPlaceholder = `${window.location.origin}/shared/`;
-  const htmlWithOG = injectOGTags(html, title, shareUrlPlaceholder);
-  const blobUrl = await uploadToBlob(htmlWithOG, articleId, config);
+  // 1. Upload article HTML to blob storage
+  const blobUrl = await uploadToBlob(html, articleId, config);
 
-  // 2. Register short link
+  // 2. Extract metadata for social media preview cards
+  const shareMeta = extractShareMeta(html);
+
+  // 3. Register short link with metadata
   const { shortCode, shareUrl } = await registerShortLink(
     blobUrl,
     title,
     accessToken,
     cloudUrl,
+    { description: shareMeta.description, originalUrl, image: shareMeta.image },
     expiresAt,
   );
 
@@ -237,10 +246,19 @@ export async function unshareArticle(
  * Resolve a share short code to a blob URL and title.
  * Used by the shared article viewer — no auth required.
  */
+/** Shape returned by the share code resolution API. */
+export interface ResolvedShare {
+  url: string;
+  title: string;
+  description?: string;
+  originalUrl?: string;
+  image?: string;
+}
+
 export async function resolveShareCode(
   code: string,
   cloudUrl?: string,
-): Promise<{ url: string; title: string }> {
+): Promise<ResolvedShare> {
   const baseUrl = cloudUrl || 'https://transmogrifier-api.azurewebsites.net';
 
   const response = await fetch(`${baseUrl}/api/s/${code}`);
@@ -252,5 +270,5 @@ export async function resolveShareCode(
     throw new Error(`Failed to resolve share link (${response.status})`);
   }
 
-  return response.json() as Promise<{ url: string; title: string }>;
+  return response.json() as Promise<ResolvedShare>;
 }

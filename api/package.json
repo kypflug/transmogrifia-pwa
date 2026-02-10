@@ -1,0 +1,16 @@
+{
+  "name": "transmogrifia-pwa-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "shared/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
