@@ -395,14 +395,14 @@ body.is-offline .offline-banner {
 @media (display-mode: window-controls-overlay) {
   /* Sidebar header: match titlebar height, leave room for controls on right */
   .sidebar-header {
-    padding-top: env(titlebar-area-y, 0px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
     min-height: env(titlebar-area-height, auto);
   }
 
   /* Article header in the reading pane: clear window controls on the right */
   .article-header {
     padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
-    padding-top: env(titlebar-area-y, 0px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
     min-height: env(titlebar-area-height, auto);
   }
 
@@ -413,7 +413,7 @@ body.is-offline .offline-banner {
 
   /* Settings header spans full width, needs right inset for controls */
   .settings-header {
-    padding-top: env(titlebar-area-y, 0px);
+    padding-top: calc(env(titlebar-area-y, 0px) + 4px);
     padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 24px);
     min-height: env(titlebar-area-height, auto);
   }
