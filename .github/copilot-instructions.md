@@ -23,6 +23,7 @@ src/
     crypto.ts          # AES-256-GCM encryption (passphrase via PBKDF2 and device-key modes)
     device-key.ts      # Per-device non-extractable CryptoKey in IndexedDB
     cloud-queue.ts     # Cloud API queue for URL-based transmogrification
+    gift-token.ts      # Gift token redemption (fetch + decrypt shared config from blob storage)
   screens/
     sign-in.ts         # Sign-in screen controller
     library.ts         # Two-pane library: article list + reader + Add URL modal
@@ -50,6 +51,7 @@ src/
 - **Hash routing:** `main.ts` routes between `#library` (default) and `#settings` via `hashchange`
 - **Settings encryption:** Two-tier model — device key (AES-256-GCM, non-extractable CryptoKey in IndexedDB) for local, user passphrase (PBKDF2 600k + AES-256-GCM) for OneDrive sync. Same crypto as the extension.
 - **Add URL:** Library toolbar has a "+ Add" button that opens a modal to submit a URL + recipe to the cloud API for transmogrification. Sends user's AI keys (BYOK) in the request body.
+- **Gift tokens:** Settings screen has a "Gift Token" section where users can enter a passphrase to import preconfigured settings. Admin encrypts `TransmogrifierSettings` with a passphrase (PBKDF2 + AES-256-GCM), uploads to `https://transmogstorage.blob.core.windows.net/giftconfigs/gift-{sha256-prefix}.enc.json`. User enters the passphrase to import settings. Token revocation = delete the blob. Admin script: `scripts/create-gift-token.ts`.
 - **No `chrome.*` APIs** — this is a standard web app, not an extension
 
 ## OneDrive Storage Layout
@@ -302,6 +304,24 @@ Adapt the subject matter and composition details as needed, but keep the waterco
 - **Rate limits:** Add 500ms delays between sequential image requests
 - **Truncation:** Always check `finish_reason === 'length'` — the response was cut off
 - **Content filter:** `finish_reason === 'content_filter'` means Azure blocked the output
+
+## Gift Token System
+
+Admin can issue revocable gift tokens that preconfigure the app with AI/cloud/sharing settings for friends.
+
+### How It Works
+1. Admin runs `npx tsx scripts/create-gift-token.ts "passphrase"` — encrypts settings from `.env` with PBKDF2, uploads to Azure Blob Storage
+2. Blob filename is `gift-{SHA256(passphrase)[0:16]}.enc.json` — passphrase never exposed in URL
+3. Blob container (`giftconfigs`) has anonymous blob-level read (no list) — can fetch by exact URL but can't enumerate
+4. User enters passphrase on settings screen → PWA hashes it to find the blob, fetches, decrypts, saves locally with device key
+5. To revoke: `npx tsx scripts/create-gift-token.ts --revoke "passphrase"` — deletes the blob
+
+### Env Vars (admin script only)
+```
+GIFT_BLOB_SAS_TOKEN    # SAS token with write/delete permission on the giftconfigs container
+```
+
+The blob container URL comes from `VITE_GIFT_BLOB_BASE` in `.env` (Vite inlines it at build time for the PWA; the admin script reads it directly).
 
 ## What This App Does NOT Do
 - Generate articles locally (cloud API handles transmogrification)

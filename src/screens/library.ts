@@ -23,7 +23,7 @@ import {
 import { renderArticleList } from '../components/article-list';
 import { renderArticleHeader } from '../components/article-header';
 import { showToast } from '../components/toast';
-import { RECIPES } from '../recipes';
+import { RECIPES, PICKER_RECIPES } from '../recipes';
 import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
 import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
@@ -194,7 +194,7 @@ function setSelectValues(): void {
 
 function populateRecipeFilters(): void {
   const filterSelect = document.getElementById('filterSelect') as HTMLSelectElement;
-  for (const recipe of RECIPES) {
+  for (const recipe of PICKER_RECIPES) {
     const opt = document.createElement('option');
     opt.value = recipe.id;
     opt.textContent = `${recipe.icon} ${recipe.name}`;
@@ -1053,7 +1053,7 @@ export function showAddUrlModal(prefillUrl?: string): void {
   // Remove existing modal if any
   document.getElementById('addUrlModal')?.remove();
 
-  const recipeOptions = RECIPES.map(r =>
+  const recipeOptions = PICKER_RECIPES.map(r =>
     `<option value="${escapeHtml(r.id)}">${escapeHtml(r.icon + ' ' + r.name)}</option>`
   ).join('');
 

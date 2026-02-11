@@ -22,6 +22,9 @@ const msalConfig: Configuration = {
 
 const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'];
 
+/** localStorage key for our own account marker (iOS recovery). */
+const ACCOUNT_HINT_KEY = 'transmogrifia_account_hint';
+
 let msalInstance: PublicClientApplication | null = null;
 let redirectHandled = false;
 
@@ -36,6 +39,13 @@ let redirectHandled = false;
  * than navigating the page. When the sheet closes, the PWA resumes without
  * reloading. Calling initAuth() again with `force: true` re-processes
  * handleRedirectPromise() to pick up the cached auth response.
+ *
+ * iOS recovery: iOS kills the WKWebView process aggressively when the PWA is
+ * backgrounded. On cold restart, `handleRedirectPromise()` may encounter stale
+ * interaction state and clear MSAL's in-memory account cache as a side effect.
+ * When that happens and we previously had a signed-in user (account hint in
+ * localStorage), we clean up the stale state and re-create the MSAL instance
+ * so the second initialisation loads accounts cleanly.
  */
 export async function initAuth(force = false): Promise<AuthenticationResult | null> {
   if (!msalInstance) {
@@ -51,11 +61,29 @@ export async function initAuth(force = false): Promise<AuthenticationResult | nu
   try {
     const response = await msalInstance.handleRedirectPromise();
     redirectHandled = true;
+
+    // Persist account hint on successful redirect sign-in
+    if (response?.account) {
+      saveAccountHint(response.account);
+    }
+
     return response;
   } catch (err) {
     console.warn('handleRedirectPromise failed (non-fatal):', err);
     // Clear any stale interaction state that could block future sign-in attempts
     cleanUpStaleState();
+
+    // iOS recovery: if we had an account before the process kill, MSAL may
+    // have cleared its in-memory cache while processing stale redirect state.
+    // Re-create the instance so the next getAllAccounts() reads from a clean
+    // localStorage without stale interaction entries interfering.
+    if (hasAccountHint()) {
+      console.debug('iOS recovery: re-creating MSAL instance after stale state cleanup');
+      msalInstance = new PublicClientApplication(msalConfig);
+      await msalInstance.initialize();
+      redirectHandled = true;
+    }
+
     return null;
   }
 }
@@ -92,7 +120,11 @@ function getMsal(): PublicClientApplication {
 export function getAccount(): AccountInfo | null {
   if (!msalInstance) return null;
   const accounts = msalInstance.getAllAccounts();
-  return accounts.length > 0 ? accounts[0] : null;
+  if (accounts.length > 0) {
+    saveAccountHint(accounts[0]);
+    return accounts[0];
+  }
+  return null;
 }
 
 /**
@@ -121,6 +153,8 @@ export async function signOut(): Promise<void> {
   const msal = getMsal();
   const account = getAccount();
   if (!account) return;
+
+  clearAccountHint();
 
   await msal.logoutRedirect({
     account,
@@ -160,4 +194,43 @@ export function isSignedIn(): boolean {
 export function getUserDisplayName(): string {
   const account = getAccount();
   return account?.name || account?.username || '';
+}
+
+/**
+ * Get the signed-in user's ID (OID) for identity-based key derivation.
+ * Returns null if not signed in.
+ * Uses MSAL's localAccountId which is the same OID as Graph /me `.id`.
+ */
+export function getUserId(): string | null {
+  const account = getAccount();
+  return account?.localAccountId ?? null;
+}
+
+// ─── Account hint (iOS process-kill recovery) ───
+
+/** Persist a lightweight marker so we know a user was previously signed in. */
+function saveAccountHint(account: AccountInfo): void {
+  try {
+    localStorage.setItem(ACCOUNT_HINT_KEY, JSON.stringify({
+      username: account.username,
+      name: account.name,
+      homeAccountId: account.homeAccountId,
+    }));
+  } catch { /* localStorage may be unavailable */ }
+}
+
+/** Returns true if we previously had a signed-in user. */
+function hasAccountHint(): boolean {
+  try {
+    return localStorage.getItem(ACCOUNT_HINT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear the account hint (on explicit sign-out). */
+function clearAccountHint(): void {
+  try {
+    localStorage.removeItem(ACCOUNT_HINT_KEY);
+  } catch { /* */ }
 }

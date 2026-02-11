@@ -291,6 +291,37 @@
   min-height: 18px;
 }
 
+/* ─── Gift Token ─── */
+.gift-token-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.gift-token-input-row input {
+  flex: 1;
+}
+
+.gift-token-input-row .settings-btn {
+  flex-shrink: 0;
+}
+
+.gift-token-status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.gift-token-status.hidden {
+  display: none;
+}
+
+.gift-token-success {
+  color: var(--edge-green);
+}
+
+.gift-token-error {
+  color: var(--edge-red);
+}
+
 /* ─── Danger Zone ─── */
 .settings-danger-section {
   border-color: var(--edge-red-light);

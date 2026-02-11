@@ -4,6 +4,19 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **WCO reader header layout** — In Window Controls Overlay mode, action buttons (favorite, share, open original, delete) now wrap to a second row beneath the window controls instead of sharing a single row with a large right padding gap.
+
+### Added
+
+- **Gift token redemption** — Settings screen has a "Gift Token" section where users can enter a passphrase from a friend to import preconfigured AI/cloud/sharing settings.
+- **Admin script `scripts/create-gift-token.ts`** — Encrypts the admin's settings with a passphrase, uploads to Azure Blob Storage. Supports `--revoke` to delete a token's blob.
+
+---
+
 ## [1.1.0] — 2026-02-10
 
 ### Added
@@ -13,7 +26,13 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Changed
 
 - **Settings header matches theme** — Settings header now uses the surface/text design tokens (like the library sidebar) instead of a blue-teal gradient, so it blends with the WCO titlebar color
+- **Simplified sync passphrase UI** — Removed the redundant "Confirm Passphrase" field; passphrase is now a single input
 - **Sign-in WCO titlebar** — Added a surface-colored titlebar strip to the sign-in screen (visible only in Window Controls Overlay mode) so the window controls don't float over the hero image
+
+### Fixed
+
+- **iOS sign-out on every app switch** — iOS kills the PWA's WKWebView process aggressively when backgrounded. On cold restart, MSAL's `handleRedirectPromise()` could encounter stale interaction state and clear its in-memory account cache, making `isSignedIn()` return false even with valid tokens in localStorage. Added an account hint marker and MSAL instance recovery: when `handleRedirectPromise` fails but a previous session existed, stale interaction keys are cleaned and MSAL is re-initialised from a clean slate so it loads cached accounts correctly.
+- **iOS passphrase lost on every app switch** — The sync passphrase was stored only in a module-level variable and explicitly cleared on `beforeunload`, which iOS fires on every process kill. Now the passphrase is encrypted with the per-device AES-256-GCM key and persisted in IndexedDB. On cold start, `restorePassphrase()` decrypts and loads it back into memory automatically. Removed the `beforeunload` wipe and 30-minute idle timeout — the passphrase persists until explicit sign-out or "Clear All Settings".
 
 - **Sync button moved to footer** — Relocated the sync/refresh button from the sidebar header to the sidebar footer (bottom-right, next to library stats) for a cleaner toolbar
 - **Shared viewer chrome bar** — Removed "Open App" CTA button; replaced it with a 🌐 globe button that links to the original article URL

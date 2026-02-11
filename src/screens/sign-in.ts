@@ -23,7 +23,7 @@ export function renderSignIn(
           <img src="/icons/icon-64.png" alt="" class="brand-icon-img" width="56" height="56">
           <h1>Library of<br>Transmogrifia</h1>
         </div>
-        <p class="sign-in-tagline">Your transmogrified articles, anywhere.</p>
+        <p class="sign-in-tagline">Remix the web. Read it anywhere. Share with a friend.</p>
         <button class="sign-in-btn" id="signInBtn">
           <svg width="20" height="20" viewBox="0 0 21 21">
             <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
@@ -34,7 +34,7 @@ export function renderSignIn(
           Sign in with Microsoft
         </button>
         <p class="sign-in-footnote">
-          Requires the <strong>Transmogrifier</strong> extension for article creation.
+          Sign in to remix any URL, or use the <strong>Transmogrifier</strong> extension to remix from a desktop browser.
         </p>
       </div>
     </div>

@@ -4,23 +4,20 @@
  * Two-tier encryption model (same as the Transmogrifier extension):
  *  1. LOCAL: Settings encrypted with a per-device AES-256-GCM key stored in IndexedDB.
  *     Transparent to the user — no passphrase needed for day-to-day use.
- *  2. CLOUD SYNC: Settings encrypted with a user-chosen passphrase (PBKDF2 + AES-256-GCM).
- *     The passphrase is entered once per device to enable OneDrive sync.
- *     The same passphrase decrypts settings on any device (extension or PWA).
- *
- * Replaces chrome.storage.local with IndexedDB and chrome.storage.session
- * with a module-scoped variable (cleared on page unload / idle timeout).
+ *  2. CLOUD SYNC: Settings encrypted with an identity-derived key (HKDF from Microsoft user ID).
+ *     Deterministic — same user ID produces the same key on any device.
+ *     No passphrase needed — derived automatically when the user is signed in.
  */
 
-import { encrypt, decrypt, encryptWithKey, decryptWithKey } from './crypto';
-import type { LocalEncryptedEnvelope } from './crypto';
+import { encryptWithIdentityKey, decryptWithIdentityKey, encryptWithKey, decryptWithKey } from './crypto';
+import type { LocalEncryptedEnvelope, SyncEncryptedEnvelope } from './crypto';
 import { getDeviceKey, deleteDeviceKey } from './device-key';
 import { getSettingsValue, setSettingsValue, removeSettingsValue } from './cache';
 import { downloadSettings, uploadSettings } from './graph';
+import { getUserId } from './auth';
 import type { TransmogrifierSettings, AIProvider, ImageProvider } from '../types';
 
 const SETTINGS_VERSION = 1;
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 // ─── Stored envelope shape ────────────────
 
@@ -32,49 +29,6 @@ interface StoredSettings {
 // ─── In-memory state ────────────────
 
 let cachedSettings: TransmogrifierSettings | null = null;
-
-/**
- * Sync passphrase — held in memory only.
- * Cleared on page unload and after idle timeout.
- */
-let syncPassphrase: string | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
-// Clear passphrase on page unload
-if (typeof window !== 'undefined') {
-  window.addEventListener('beforeunload', () => {
-    syncPassphrase = null;
-  });
-}
-
-function resetIdleTimer(): void {
-  if (idleTimer) clearTimeout(idleTimer);
-  if (syncPassphrase) {
-    idleTimer = setTimeout(() => {
-      syncPassphrase = null;
-      console.log('[Settings] Sync passphrase cleared (idle timeout)');
-    }, IDLE_TIMEOUT_MS);
-  }
-}
-
-// ─── Sync passphrase management ────────────────
-
-export function hasSyncPassphrase(): boolean {
-  return !!syncPassphrase;
-}
-
-export function setSyncPassphrase(p: string): void {
-  syncPassphrase = p;
-  resetIdleTimer();
-}
-
-export function clearSyncPassphrase(): void {
-  syncPassphrase = null;
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
-}
 
 // ─── Default settings ────────────────
 
@@ -142,11 +96,10 @@ export async function saveSettings(settings: TransmogrifierSettings): Promise<vo
 }
 
 /**
- * Clear all settings, device key, and sync passphrase.
+ * Clear all settings, device key, and cached state.
  */
 export async function clearSettings(): Promise<void> {
   await removeSettingsValue('envelope');
-  clearSyncPassphrase();
   await deleteDeviceKey();
   cachedSettings = null;
 }
@@ -162,12 +115,13 @@ export function invalidateCache(): void {
 
 /**
  * Push settings to OneDrive.
- * Loads settings, re-encrypts with sync passphrase (PBKDF2), uploads.
- * Requires a sync passphrase to be set.
+ * Loads settings, encrypts with identity key (HKDF from userId), uploads.
+ * Requires the user to be signed in.
  */
 export async function pushSettingsToCloud(): Promise<void> {
-  if (!syncPassphrase) {
-    throw new Error('No sync passphrase set. Set a passphrase first.');
+  const userId = getUserId();
+  if (!userId) {
+    throw new Error('Not signed in. Sign in to sync settings.');
   }
 
   const settings = await loadSettings();
@@ -176,22 +130,22 @@ export async function pushSettingsToCloud(): Promise<void> {
   }
 
   const json = JSON.stringify(settings);
-  const envelope = await encrypt(json, syncPassphrase);
+  const envelope = await encryptWithIdentityKey(json, userId);
   await uploadSettings(envelope, settings.updatedAt);
-  resetIdleTimer();
 
   console.log('[Settings] Pushed settings to OneDrive');
 }
 
 /**
  * Pull settings from OneDrive.
- * Downloads settings.enc.json, decrypts with sync passphrase,
+ * Downloads settings.enc.json, decrypts with identity key (or legacy passphrase),
  * re-encrypts with device key, stores in IDB.
  * Returns true if settings were updated.
  */
 export async function pullSettingsFromCloud(): Promise<boolean> {
-  if (!syncPassphrase) {
-    throw new Error('No sync passphrase set. Set a passphrase first.');
+  const userId = getUserId();
+  if (!userId) {
+    throw new Error('Not signed in. Sign in to sync settings.');
   }
 
   const cloudFile = await downloadSettings();
@@ -207,14 +161,27 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
     return false;
   }
 
-  // Decrypt the inner envelope with passphrase
+  const envelope = cloudFile.envelope;
   let settings: TransmogrifierSettings;
-  try {
-    const json = await decrypt(cloudFile.envelope, syncPassphrase);
-    settings = JSON.parse(json) as TransmogrifierSettings;
-  } catch (err) {
-    console.error('[Settings] Failed to decrypt cloud settings (wrong passphrase?):', err);
-    throw new Error('Failed to decrypt settings. Check your passphrase.');
+
+  if (envelope.v === 2) {
+    // v2: identity-key encrypted
+    try {
+      const json = await decryptWithIdentityKey(envelope as SyncEncryptedEnvelope, userId);
+      settings = JSON.parse(json) as TransmogrifierSettings;
+    } catch (err) {
+      console.error('[Settings] Failed to decrypt cloud settings:', err);
+      throw new Error('Failed to decrypt settings from OneDrive.');
+    }
+  } else if (envelope.v === 1 && 'salt' in envelope) {
+    // v1: legacy passphrase-encrypted — need migration
+    // TODO: Prompt for legacy passphrase if v1 envelope is encountered
+    throw new Error(
+      'Settings on OneDrive use the old passphrase format. ' +
+      'Please re-push settings from the extension to upgrade to the new format.'
+    );
+  } else {
+    throw new Error(`Unknown settings encryption version: ${(envelope as { v: number }).v}`);
   }
 
   // Re-encrypt with device key and store locally
@@ -226,7 +193,6 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
   };
   await setSettingsValue('envelope', newStored);
   cachedSettings = settings;
-  resetIdleTimer();
 
   console.log('[Settings] Imported settings from cloud (re-encrypted with device key)');
   return true;

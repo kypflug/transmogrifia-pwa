@@ -26,6 +26,7 @@ A Progressive Web App for reading your [Transmogrifier](https://github.com/kypfl
 - **In-progress tracking** — Cloud jobs show as pending items with spinners; click to see progress and cancel
 - **Share Target** — On Android/ChromeOS/Windows/macOS, share a URL from any app to open the Add URL modal pre-filled
 - **iOS Share Shortcut** — Settings include a guided setup for an Apple Shortcut to share URLs on iOS
+- **Gift tokens** — Admin can issue revocable gift tokens (passphrases) that preconfigure friends' apps with working AI/cloud/sharing settings
 
 ## Getting Started
 
@@ -90,6 +91,7 @@ src/
     crypto.ts          # AES-256-GCM encryption (passphrase and device-key modes)
     device-key.ts      # Per-device non-extractable CryptoKey in IndexedDB
     cloud-queue.ts     # Cloud API queue for URL-based transmogrification
+    gift-token.ts      # Gift token redemption (fetch + decrypt shared config)
   screens/
     sign-in.ts         # Sign-in screen
     library.ts         # Two-pane library: article list + reader + Add URL modal
@@ -116,7 +118,8 @@ src/
 5. Articles render in a sandboxed `<iframe>` for security
 6. The favorite toggle and settings sync are the write-back operations
 7. **Add URL** sends a URL + your AI keys to a cloud API for server-side transmogrification; the result is uploaded to your OneDrive and appears on next sync
-7. A service worker precaches the app shell for full offline support
+8. **Gift tokens** let the admin share preconfigured settings with friends — redeem on the Settings screen after signing in
+9. A service worker precaches the app shell for full offline support
 
 ## Deployment
 

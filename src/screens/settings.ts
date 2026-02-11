@@ -2,20 +2,19 @@
  * Settings Screen for Library of Transmogrifia
  *
  * Card-based form matching the extension's settings UI.
- * Sections: Sync Passphrase, AI Provider, Image Provider, Cloud API, Sync Actions, Danger Zone.
+ * Sections: AI Provider, Image Provider, Sharing, Sync Actions, Danger Zone.
  */
 
 import {
   loadSettings,
   saveSettings,
   clearSettings,
-  hasSyncPassphrase,
-  setSyncPassphrase,
-  clearSyncPassphrase,
   pushSettingsToCloud,
   pullSettingsFromCloud,
 } from '../services/settings';
+import { isSignedIn } from '../services/auth';
 import { showToast } from '../components/toast';
+import { redeemGiftToken } from '../services/gift-token';
 import { escapeHtml } from '../utils/storage';
 import type { TransmogrifierSettings, AIProvider, ImageProvider, SharingProvider } from '../types';
 
@@ -34,35 +33,6 @@ export function renderSettings(root: HTMLElement): void {
       </header>
 
       <main class="settings-content">
-
-        <!-- Sync Passphrase -->
-        <section class="settings-section" id="passphraseSection">
-          <div class="settings-section-header">
-            <h2>🔐 Sync Passphrase</h2>
-            <span class="settings-badge" id="passphraseBadge">Not set</span>
-          </div>
-          <p class="settings-section-desc">
-            Your API keys are encrypted locally on this device automatically.
-            To sync settings across devices via OneDrive, set a passphrase here.
-            Use the same passphrase on all your devices.
-          </p>
-          <div class="settings-field">
-            <label for="settingsPassphrase">Passphrase</label>
-            <div class="settings-input-action">
-              <input type="password" id="settingsPassphrase" name="passphrase" placeholder="Enter a strong passphrase…" autocomplete="current-password">
-              <button class="settings-input-action-btn" id="togglePassphraseVis" title="Show/hide">👁️</button>
-            </div>
-          </div>
-          <div class="settings-field">
-            <label for="settingsPassphraseConfirm">Confirm Passphrase</label>
-            <input type="password" id="settingsPassphraseConfirm" name="passphrase-confirm" placeholder="Confirm passphrase…" autocomplete="current-password">
-          </div>
-          <div class="settings-actions">
-            <button class="settings-btn settings-btn-primary" id="setPassphraseBtn">Set Passphrase</button>
-            <button class="settings-btn settings-btn-secondary hidden" id="forgetPassphraseBtn">Forget</button>
-            <span class="settings-field-error hidden" id="passphraseError"></span>
-          </div>
-        </section>
 
         <!-- AI Provider -->
         <section class="settings-section" id="aiSection">
@@ -256,7 +226,7 @@ export function renderSettings(root: HTMLElement): void {
           </div>
           <p class="settings-section-desc">
             Sync your encrypted settings to OneDrive so they're available on all your devices.
-            Requires setting a sync passphrase above.
+            Requires signing in to your Microsoft account.
           </p>
           <div class="settings-sync-actions">
             <button class="settings-btn settings-btn-secondary" id="pushSettingsBtn" title="Upload settings to OneDrive">
@@ -267,6 +237,33 @@ export function renderSettings(root: HTMLElement): void {
             </button>
           </div>
           <p class="settings-sync-status" id="syncStatus"></p>
+        </section>
+
+        <!-- Gift Token -->
+        <section class="settings-section">
+          <div class="settings-section-header">
+            <h2>🎁 Gift Token</h2>
+          </div>
+          <p class="settings-section-desc">
+            Received a gift token from a friend? Enter the passphrase below to
+            import their shared AI and cloud settings.
+          </p>
+          <div class="settings-field">
+            <label for="giftTokenInput">Token passphrase</label>
+            <div class="gift-token-input-row">
+              <input
+                type="text"
+                id="giftTokenInput"
+                placeholder="e.g. sunny-river-otter"
+                autocomplete="off"
+                spellcheck="false"
+              >
+              <button class="settings-btn settings-btn-primary" id="giftTokenRedeem" type="button">
+                Redeem
+              </button>
+            </div>
+            <p class="gift-token-status hidden" id="giftTokenStatus"></p>
+          </div>
         </section>
 
         <!-- iOS Share Shortcut (shown only on iOS) -->
@@ -330,14 +327,13 @@ async function initSettingsScreen(): Promise<void> {
 
   populateForm(settings);
   updateBadges(settings);
-  updatePassphraseUI();
 
   setupBackButton();
-  setupPassphraseSection();
   setupProviderSwitching();
   setupSaveOnChange();
   setupSyncButtons();
   setupClearSettings();
+  setupGiftToken();
   setupIOSShortcut();
 }
 
@@ -410,30 +406,12 @@ function updateBadges(s: TransmogrifierSettings): void {
 
   // Sync badge
   const syncBadge = document.getElementById('syncBadge')!;
-  if (hasSyncPassphrase()) {
+  if (isSignedIn()) {
     syncBadge.textContent = 'Ready';
     syncBadge.className = 'settings-badge configured';
   } else {
-    syncBadge.textContent = 'Local only';
+    syncBadge.textContent = 'Not signed in';
     syncBadge.className = 'settings-badge';
-  }
-}
-
-function updatePassphraseUI(): void {
-  const badge = document.getElementById('passphraseBadge')!;
-  const forgetBtn = document.getElementById('forgetPassphraseBtn')!;
-  const setBtn = document.getElementById('setPassphraseBtn')!;
-
-  if (hasSyncPassphrase()) {
-    badge.textContent = '🔒 Passphrase set';
-    badge.className = 'settings-badge configured';
-    forgetBtn.classList.remove('hidden');
-    setBtn.textContent = 'Change Passphrase';
-  } else {
-    badge.textContent = '🔓 No passphrase';
-    badge.className = 'settings-badge';
-    forgetBtn.classList.add('hidden');
-    setBtn.textContent = 'Set Passphrase';
   }
 }
 
@@ -442,59 +420,6 @@ function updatePassphraseUI(): void {
 function setupBackButton(): void {
   document.getElementById('settingsBackBtn')!.addEventListener('click', () => {
     location.hash = '#library';
-  });
-}
-
-function setupPassphraseSection(): void {
-  // Toggle visibility
-  document.getElementById('togglePassphraseVis')!.addEventListener('click', () => {
-    const input = document.getElementById('settingsPassphrase') as HTMLInputElement;
-    const confirm = document.getElementById('settingsPassphraseConfirm') as HTMLInputElement;
-    const isPassword = input.type === 'password';
-    input.type = isPassword ? 'text' : 'password';
-    confirm.type = isPassword ? 'text' : 'password';
-  });
-
-  // Set passphrase
-  document.getElementById('setPassphraseBtn')!.addEventListener('click', () => {
-    const input = document.getElementById('settingsPassphrase') as HTMLInputElement;
-    const confirm = document.getElementById('settingsPassphraseConfirm') as HTMLInputElement;
-    const errorEl = document.getElementById('passphraseError')!;
-
-    const p = input.value.trim();
-    const c = confirm.value.trim();
-
-    if (!p) {
-      errorEl.textContent = 'Passphrase cannot be empty';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-    if (p.length < 8) {
-      errorEl.textContent = 'Passphrase must be at least 8 characters';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-    if (p !== c) {
-      errorEl.textContent = 'Passphrases do not match';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-
-    errorEl.classList.add('hidden');
-    setSyncPassphrase(p);
-    input.value = '';
-    confirm.value = '';
-    updatePassphraseUI();
-    updateBadges(collectSettings());
-    showToast('Passphrase set');
-  });
-
-  // Forget passphrase
-  document.getElementById('forgetPassphraseBtn')!.addEventListener('click', () => {
-    clearSyncPassphrase();
-    updatePassphraseUI();
-    updateBadges(collectSettings());
-    showToast('Passphrase forgotten');
   });
 }
 
@@ -700,6 +625,50 @@ function collectSettings(): TransmogrifierSettings {
     },
     updatedAt: 0, // Will be set by saveSettings()
   };
+}
+
+// ─── Gift Token ────────────────
+
+function setupGiftToken(): void {
+  const input = document.getElementById('giftTokenInput') as HTMLInputElement;
+  const redeemBtn = document.getElementById('giftTokenRedeem') as HTMLButtonElement;
+  const status = document.getElementById('giftTokenStatus') as HTMLElement;
+
+  async function handleRedeem(): Promise<void> {
+    const token = input.value.trim();
+    if (!token) {
+      input.focus();
+      return;
+    }
+
+    redeemBtn.disabled = true;
+    redeemBtn.textContent = 'Redeeming…';
+    status.classList.add('hidden');
+
+    try {
+      await redeemGiftToken(token);
+      status.textContent = '✅ Settings imported! Reload to apply them.';
+      status.className = 'gift-token-status gift-token-success';
+      input.value = '';
+
+      // Refresh the form to show imported settings
+      const settings = await loadSettings();
+      populateForm(settings);
+      updateBadges(settings);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Redemption failed.';
+      status.textContent = msg;
+      status.className = 'gift-token-status gift-token-error';
+    } finally {
+      redeemBtn.disabled = false;
+      redeemBtn.textContent = 'Redeem';
+    }
+  }
+
+  redeemBtn.addEventListener('click', handleRedeem);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleRedeem();
+  });
 }
 
 // ─── Helpers ────────────────

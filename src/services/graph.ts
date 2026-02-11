@@ -1,6 +1,6 @@
 import { getAccessToken } from './auth';
 import type { OneDriveArticleMeta, UserProfile } from '../types';
-import type { EncryptedEnvelope } from './crypto';
+import type { SyncEncryptedEnvelope, LegacyEncryptedEnvelope } from './crypto';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
@@ -241,7 +241,7 @@ export async function getUserProfile(): Promise<UserProfile> {
 
 /** Shape of settings.enc.json on OneDrive (matches extension format) */
 export interface CloudSettingsFile {
-  envelope: EncryptedEnvelope;
+  envelope: SyncEncryptedEnvelope | LegacyEncryptedEnvelope;
   updatedAt: number;
 }
 
@@ -264,7 +264,7 @@ export async function downloadSettings(): Promise<CloudSettingsFile | null> {
  * Upload encrypted settings to OneDrive AppFolder.
  * Wraps the envelope in `{ envelope, updatedAt }` to match the extension format.
  */
-export async function uploadSettings(envelope: EncryptedEnvelope, updatedAt: number): Promise<void> {
+export async function uploadSettings(envelope: SyncEncryptedEnvelope, updatedAt: number): Promise<void> {
   const headers = await authHeaders();
   const payload: CloudSettingsFile = { envelope, updatedAt };
   const res = await fetch(
