@@ -247,6 +247,8 @@ body.is-offline .offline-banner {
   justify-content: center;
   z-index: 900;
   padding: 16px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .modal-dialog {
