@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFFFF">
+  <title>Page Not Found — Library of Transmogrifia</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <style>
+    /* ===== Reset ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #1B1B1F;
+      background: #FAFAFA;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== Layout ===== */
+    .not-found-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    }
+
+    /* ===== Hero Background ===== */
+    .not-found-hero {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .not-found-hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+
+    .not-found-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.50) 0%,
+        rgba(0, 0, 0, 0.30) 50%,
+        rgba(0, 0, 0, 0.55) 100%
+      );
+      backdrop-filter: blur(2px);
+    }
+
+    /* ===== Card ===== */
+    .not-found-card {
+      position: relative;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.2),
+        0 2px 8px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(16px);
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 420px;
+      width: 90%;
+    }
+
+    .not-found-icon {
+      font-size: 56px;
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+
+    .not-found-code {
+      font-size: 48px;
+      font-weight: 800;
+      color: #0078D4;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+
+    .not-found-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1B1B1F;
+      margin-bottom: 12px;
+    }
+
+    .not-found-message {
+      font-size: 15px;
+      color: #616161;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .not-found-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      background: #0078D4;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .not-found-btn:hover {
+      background: #106EBE;
+      transform: translateY(-1px);
+    }
+
+    .not-found-btn:active {
+      transform: translateY(0);
+    }
+
+    .not-found-footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #9E9E9E;
+    }
+
+    /* ===== Dark theme ===== */
+    @media (prefers-color-scheme: dark) {
+      body { color: #E5E5E5; background: #1B1B1F; }
+      meta[name="theme-color"] { content: #1B1B1F; }
+
+      .not-found-hero-overlay {
+        background: linear-gradient(
+          135deg,
+          rgba(0, 0, 0, 0.65) 0%,
+          rgba(0, 0, 0, 0.45) 50%,
+          rgba(0, 0, 0, 0.70) 100%
+        );
+      }
+
+      .not-found-card {
+        background: rgba(43, 43, 48, 0.88);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .not-found-title { color: #E5E5E5; }
+      .not-found-message { color: #A0A0A0; }
+      .not-found-footer { color: #6A6A6A; }
+    }
+
+    /* ===== Mobile ===== */
+    @media (max-width: 480px) {
+      .not-found-card { padding: 36px 24px; margin: 0 16px; }
+      .not-found-code { font-size: 40px; }
+      .not-found-title { font-size: 18px; }
+      .not-found-icon { font-size: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="not-found-screen">
+    <div class="not-found-hero">
+      <picture>
+        <source srcset="/images/hero.avif" type="image/avif">
+        <source srcset="/images/hero.webp" type="image/webp">
+        <img src="/images/hero.jpg" alt="" class="not-found-hero-img" loading="eager">
+      </picture>
+      <div class="not-found-hero-overlay"></div>
+    </div>
+    <div class="not-found-card">
+      <div class="not-found-icon">📜</div>
+      <div class="not-found-code">404</div>
+      <h1 class="not-found-title">This scroll was not found</h1>
+      <p class="not-found-message">
+        The page you're looking for may have been moved, removed, or never existed in this library.
+      </p>
+      <a href="/" class="not-found-btn">
+        📚 Back to the Library
+      </a>
+      <p class="not-found-footer">Library of Transmogrifia</p>
+    </div>
+  </div>
+</body>
+</html>

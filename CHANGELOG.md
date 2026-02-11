@@ -8,6 +8,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Added
 
+- **Custom 404 page** — Themed "page not found" screen with hero background, dark mode support, and a link back to the library
 - **Auto-import settings on new device** — When signing in on a device with no local settings, the PWA automatically pulls existing settings from OneDrive. Existing settings are never overwritten.
 
 ### Fixed
