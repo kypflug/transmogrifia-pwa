@@ -689,6 +689,7 @@ function hasAIKey(s: TransmogrifierSettings): boolean {
     case 'openai': return !!(s.ai.openai?.apiKey);
     case 'anthropic': return !!(s.ai.anthropic?.apiKey);
     case 'google': return !!(s.ai.google?.apiKey);
+    default: return false;
   }
 }
 
@@ -698,6 +699,7 @@ function hasImageKey(s: TransmogrifierSettings): boolean {
     case 'openai': return !!(s.image.openai?.apiKey);
     case 'google': return !!(s.image.google?.apiKey);
     case 'none': return false;
+    default: return false;
   }
 }
 
@@ -708,5 +710,6 @@ function getProviderName(provider: AIProvider | ImageProvider): string {
     case 'anthropic': return 'Anthropic Claude';
     case 'google': return 'Google Gemini';
     case 'none': return 'None';
+    default: return String(provider);
   }
 }
