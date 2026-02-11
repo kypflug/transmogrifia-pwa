@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Gift token settings not appearing** — After redeeming a gift token, imported settings were not displayed in the form (fields appeared blank with a misleading "reload to apply" message). Now re-renders the full settings screen so values appear immediately.
+
 ### Changed
 
 - **WCO reader header layout** — In Window Controls Overlay mode, action buttons (favorite, share, open original, delete) now wrap to a second row beneath the window controls instead of sharing a single row with a large right padding gap.
@@ -13,10 +17,6 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Added
 
 - **Gift token redemption** — Settings screen has a "Gift Token" section where users can enter a passphrase from a friend to import preconfigured AI/cloud/sharing settings.
-
-### Fixed
-
-- **Gift token 404** — Hardcoded the gift blob storage URL instead of relying on `VITE_GIFT_BLOB_BASE` env var, which was unset and caused fetches to resolve against the PWA's own domain (404).
 
 ---
 

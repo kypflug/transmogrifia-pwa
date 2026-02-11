@@ -647,14 +647,12 @@ function setupGiftToken(): void {
 
     try {
       await redeemGiftToken(token);
-      status.textContent = '✅ Settings imported! Reload to apply them.';
-      status.className = 'gift-token-status gift-token-success';
-      input.value = '';
+      showToast('Gift token redeemed — settings imported!');
 
-      // Refresh the form to show imported settings
-      const settings = await loadSettings();
-      populateForm(settings);
-      updateBadges(settings);
+      // Re-render the entire settings screen so imported values appear
+      const root = document.getElementById('app')!;
+      renderSettings(root);
+      return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Redemption failed.';
       status.textContent = msg;
