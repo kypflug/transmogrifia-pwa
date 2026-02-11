@@ -4,7 +4,11 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [1.2.0] — 2026-02-10
+
+### Added
+
+- **Auto-import settings on new device** — When signing in on a device with no local settings, the PWA automatically pulls existing settings from OneDrive. Existing settings are never overwritten.
 
 ### Fixed
 

@@ -28,7 +28,7 @@ import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
 import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
 import { shareArticle, unshareArticle } from '../services/blob-storage';
-import { getEffectiveSharingConfig } from '../services/settings';
+import { getEffectiveSharingConfig, tryAutoImportFromCloud } from '../services/settings';
 
 /** A cloud job that is in progress (tracked client-side only). */
 interface PendingJob {
@@ -180,6 +180,11 @@ async function initLibrary(): Promise<void> {
   populateRecipeFilters();
   setSelectValues();
   setupFab();
+
+  // On a new device with no settings, silently pull from OneDrive
+  tryAutoImportFromCloud().then(imported => {
+    if (imported) showToast('Settings imported from OneDrive');
+  });
 
   // Load articles
   await loadArticles();

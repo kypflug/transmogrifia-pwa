@@ -198,6 +198,36 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
   return true;
 }
 
+// ─── Auto-import on new device ────────────────
+
+/**
+ * If local settings are blank (never configured), attempt to pull from
+ * OneDrive.  Call this once after sign-in / app boot so a user signing in
+ * on a new device inherits their cloud settings automatically.  Existing
+ * settings are never overwritten.
+ *
+ * Returns `true` if settings were imported.
+ */
+export async function tryAutoImportFromCloud(): Promise<boolean> {
+  const local = await loadSettings();
+  if (local.updatedAt !== 0) {
+    // User already has settings on this device — leave them alone
+    return false;
+  }
+
+  try {
+    const imported = await pullSettingsFromCloud();
+    if (imported) {
+      console.log('[Settings] Auto-imported settings from OneDrive (new device)');
+    }
+    return imported;
+  } catch (err) {
+    // Non-fatal — the user can still configure manually
+    console.warn('[Settings] Auto-import from cloud failed:', err);
+    return false;
+  }
+}
+
 // ─── Config resolution ────────────────
 
 /**
