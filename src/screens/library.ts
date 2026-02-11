@@ -483,7 +483,19 @@ async function openArticle(id: string): Promise<void> {
   // scrollable overflow (scrollH == clientH), it becomes a "scroll trap" —
   // the browser absorbs wheel events without actually scrolling, and never
   // propagates them up to <html> (the real scroll container).
-  const injectedStyles = `<style>
+  // Inject <base> so relative URLs (images, links) resolve against the
+  // original article's site, not the PWA's origin.
+  let baseTag = '';
+  if (meta.originalUrl) {
+    try {
+      const base = new URL(meta.originalUrl);
+      base.hash = '';
+      base.search = '';
+      baseTag = `<base href="${base.href}">`;
+    } catch { /* invalid URL — skip */ }
+  }
+
+  const injectedStyles = `${baseTag}<style>
     .remix-save-fab { display: none !important; }
     html {
       max-width: 100vw !important;

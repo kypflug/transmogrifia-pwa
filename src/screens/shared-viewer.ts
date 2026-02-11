@@ -100,8 +100,21 @@ export async function renderSharedViewer(
     const frame = document.getElementById('sharedFrame') as HTMLIFrameElement | null;
     if (!frame) return;
 
+    // Inject <base> so relative URLs (images, links) resolve against the
+    // original article's site, not the PWA's origin.
+    let baseTag = '';
+    if (originalUrl) {
+      try {
+        const base = new URL(originalUrl);
+        base.hash = '';
+        base.search = '';
+        baseTag = `<base href="${base.href}">`;
+      } catch { /* invalid URL — skip */ }
+    }
+
     // Inject style overrides to hide the save FAB and fix viewport
     const styleOverride = `
+      ${baseTag}
       <style>
         .remix-save-fab { display: none !important; }
         html, body { overflow-x: hidden; max-width: 100vw; }

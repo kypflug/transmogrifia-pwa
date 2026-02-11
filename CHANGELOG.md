@@ -4,6 +4,12 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Broken images in transmogrified articles** — Article HTML with relative image/link paths (e.g., `/_next/static/media/...` from Next.js source sites) now resolves correctly. Injects a `<base>` tag pointing to the original article's URL so relative URLs load from the source site, not the PWA's origin. Applies to both the library reader and the shared article viewer.
+
 ## [1.2.0] — 2026-02-10
 
 ### Added
