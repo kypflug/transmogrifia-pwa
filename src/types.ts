@@ -9,6 +9,7 @@
 // Re-export shared types from core
 export type {
   OneDriveArticleMeta,
+  OneDriveImageAsset,
   AIProvider,
   ImageProvider,
   AIProviderSettings,

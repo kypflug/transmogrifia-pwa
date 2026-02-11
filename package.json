@@ -19,6 +19,6 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^5.1.0",
-    "@kypflug/transmogrifier-core": "^0.1.0"
+    "@kypflug/transmogrifier-core": "file:../transmogrifier-core"
   }
 }

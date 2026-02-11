@@ -1,6 +1,6 @@
-import type { OneDriveArticleMeta, SortOrder, FilterMode } from '../types';
+import type { OneDriveArticleMeta, OneDriveImageAsset, SortOrder, FilterMode } from '../types';
 import { signOut, getUserDisplayName } from '../services/auth';
-import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken } from '../services/graph';
+import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken, downloadArticleAsset } from '../services/graph';
 import {
   getCachedMeta,
   cacheHtml,
@@ -49,6 +49,62 @@ let filterMode: FilterMode = 'all';
 let container: HTMLElement;
 let pendingJobs: PendingJob[] = [];
 let selectedPendingId: string | null = null;
+let activeBlobUrls: string[] = [];
+
+function releaseActiveBlobUrls(): void {
+  for (const url of activeBlobUrls) {
+    URL.revokeObjectURL(url);
+  }
+  activeBlobUrls = [];
+}
+
+async function resolveImagesForHtml(html: string, meta: OneDriveArticleMeta): Promise<string> {
+  if (!meta.images || meta.images.length === 0) return html;
+
+  const assetsById = new Map(meta.images.map(asset => [asset.id, asset]));
+  const assetsBySrc = new Map(
+    meta.images
+      .filter(asset => asset.originalUrl)
+      .map(asset => [asset.originalUrl as string, asset]),
+  );
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const images = Array.from(doc.querySelectorAll('img')) as HTMLImageElement[];
+
+  const tasks = images.map(async (img) => {
+    const asset = findImageAsset(img, assetsById, assetsBySrc);
+    if (!asset) return;
+    try {
+      const blob = await downloadArticleAsset(asset.drivePath);
+      const blobUrl = URL.createObjectURL(blob);
+      activeBlobUrls.push(blobUrl);
+      img.setAttribute('src', blobUrl);
+      img.setAttribute('data-tmg-asset-id', asset.id);
+    } catch (err) {
+      console.warn('Failed to resolve image asset:', asset.drivePath, err);
+    }
+  });
+
+  await Promise.all(tasks);
+  return doc.documentElement?.outerHTML || html;
+}
+
+function findImageAsset(
+  img: HTMLImageElement,
+  assetsById: Map<string, OneDriveImageAsset>,
+  assetsBySrc: Map<string, OneDriveImageAsset>,
+): OneDriveImageAsset | undefined {
+  const assetId = img.getAttribute('data-tmg-asset-id');
+  if (assetId && assetsById.has(assetId)) return assetsById.get(assetId);
+
+  const src = img.getAttribute('src');
+  if (src && assetsBySrc.has(src)) return assetsBySrc.get(src);
+
+  const originalSrc = img.getAttribute('data-tmg-asset-src');
+  if (originalSrc && assetsBySrc.has(originalSrc)) return assetsBySrc.get(originalSrc);
+
+  return undefined;
+}
 
 export function renderLibrary(root: HTMLElement): void {
   container = root;
@@ -408,6 +464,14 @@ async function openArticle(id: string): Promise<void> {
   // Attach header action handlers
   setupArticleActions(meta);
 
+  releaseActiveBlobUrls();
+  let renderHtml = html;
+  try {
+    renderHtml = await resolveImagesForHtml(html, meta);
+  } catch (err) {
+    console.warn('Failed to resolve article images:', err);
+  }
+
   // Render in iframe
   const frame = document.getElementById('contentFrame') as HTMLIFrameElement;
   // Inject styles: hide extension UI + lock horizontal scroll + ensure vertical scroll
@@ -477,7 +541,7 @@ async function openArticle(id: string): Promise<void> {
     requestAnimationFrame(trySetup);
   };
 
-  frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
+  frame.srcdoc = renderHtml.replace('</head>', injectedStyles + '</head>');
 
   showReaderState('content');
 
@@ -490,6 +554,7 @@ async function openArticle(id: string): Promise<void> {
 
 function goBack(): void {
   destroyGestures();
+  releaseActiveBlobUrls();
   document.body.classList.remove('mobile-reading');
   currentId = null;
   selectedPendingId = null;

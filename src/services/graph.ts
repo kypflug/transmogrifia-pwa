@@ -219,12 +219,29 @@ export async function deleteArticle(id: string): Promise<void> {
       method: 'DELETE',
       headers,
     }),
+    fetch(`${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}`, {
+      method: 'DELETE',
+      headers,
+    }),
   ]);
   for (const r of results) {
     if (r.status === 'fulfilled' && !r.value.ok && r.value.status !== 404) {
       throw new Error(`Delete failed: ${r.value.status}`);
     }
   }
+}
+
+/**
+ * Download a binary asset from OneDrive (e.g., stored images).
+ */
+export async function downloadArticleAsset(drivePath: string): Promise<Blob> {
+  const headers = await authHeaders();
+  const res = await fetch(
+    `${GRAPH_BASE}/me/drive/special/approot:/${drivePath}:/content`,
+    { headers },
+  );
+  if (!res.ok) throw new Error(`Download asset failed: ${res.status}`);
+  return res.blob();
 }
 
 /**
