@@ -155,6 +155,7 @@ export async function signOut(): Promise<void> {
   if (!account) return;
 
   clearAccountHint();
+  clearCachedUserId();
 
   await msal.logoutRedirect({
     account,
@@ -196,14 +197,51 @@ export function getUserDisplayName(): string {
   return account?.name || account?.username || '';
 }
 
+// ─── Graph user ID (for identity-based key derivation) ───
+
+/** Cached Graph `/me` id — matches the extension's userId source exactly. */
+let cachedGraphUserId: string | null = null;
+
 /**
- * Get the signed-in user's ID (OID) for identity-based key derivation.
- * Returns null if not signed in.
- * Uses MSAL's localAccountId which is the same OID as Graph /me `.id`.
+ * Get the signed-in user's Graph user ID for identity-based key derivation.
+ * Fetches `/me` from Graph on first call and caches the result, ensuring the
+ * same ID source as the extension (which stores `profile.id` from Graph `/me`).
+ *
+ * Previous implementation used MSAL's `localAccountId` (the `oid` claim from
+ * the ID token). While these are usually identical for consumer MSA accounts,
+ * using the same Graph source as the extension guarantees the HKDF-derived
+ * encryption key matches across extension ↔ PWA.
  */
-export function getUserId(): string | null {
+export async function getUserId(): Promise<string | null> {
   const account = getAccount();
-  return account?.localAccountId ?? null;
+  if (!account) return null;
+
+  if (cachedGraphUserId) return cachedGraphUserId;
+
+  try {
+    const token = await getAccessToken();
+    const res = await fetch('https://graph.microsoft.com/v1.0/me?$select=id', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      console.warn('[Auth] Failed to fetch Graph userId, falling back to localAccountId');
+      return account.localAccountId;
+    }
+    const profile = await res.json();
+    cachedGraphUserId = profile.id;
+    console.log('[Auth] Graph userId:', cachedGraphUserId!.substring(0, 8) + '…');
+    return cachedGraphUserId;
+  } catch (err) {
+    console.warn('[Auth] Error fetching Graph userId, falling back to localAccountId:', err);
+    return account.localAccountId;
+  }
+}
+
+/**
+ * Clear the cached Graph user ID (call on sign-out).
+ */
+export function clearCachedUserId(): void {
+  cachedGraphUserId = null;
 }
 
 // ─── Account hint (iOS process-kill recovery) ───

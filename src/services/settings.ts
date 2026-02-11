@@ -119,7 +119,7 @@ export function invalidateCache(): void {
  * Requires the user to be signed in.
  */
 export async function pushSettingsToCloud(): Promise<void> {
-  const userId = getUserId();
+  const userId = await getUserId();
   if (!userId) {
     throw new Error('Not signed in. Sign in to sync settings.');
   }
@@ -129,6 +129,7 @@ export async function pushSettingsToCloud(): Promise<void> {
     throw new Error('No settings to push. Configure your settings first.');
   }
 
+  console.log('[Settings] Encrypting for sync, userId prefix:', userId.substring(0, 8) + '…');
   const json = JSON.stringify(settings);
   const envelope = await encryptWithIdentityKey(json, userId);
   await uploadSettings(envelope, settings.updatedAt);
@@ -143,7 +144,7 @@ export async function pushSettingsToCloud(): Promise<void> {
  * Returns true if settings were updated.
  */
 export async function pullSettingsFromCloud(): Promise<boolean> {
-  const userId = getUserId();
+  const userId = await getUserId();
   if (!userId) {
     throw new Error('Not signed in. Sign in to sync settings.');
   }
@@ -167,6 +168,9 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
   if (envelope.v === 2) {
     // v2: identity-key encrypted
     try {
+      console.log('[Settings] Decrypting cloud settings, userId prefix:', userId.substring(0, 8) + '…,',
+        'iv length:', (envelope as SyncEncryptedEnvelope).iv.length,
+        'data length:', (envelope as SyncEncryptedEnvelope).data.length);
       const json = await decryptWithIdentityKey(envelope as SyncEncryptedEnvelope, userId);
       settings = JSON.parse(json) as TransmogrifierSettings;
     } catch (err) {
