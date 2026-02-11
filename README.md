@@ -33,6 +33,7 @@ A Progressive Web App for reading your [Transmogrifier](https://github.com/kypfl
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 18+
+- A `GITHUB_NPM_TOKEN` with `read:packages` scope, set as an environment variable (the `@kypflug/transmogrifier-core` package is hosted on GitHub Packages)
 - A Microsoft account with articles saved by the [Transmogrifier extension](https://github.com/kypflug/transmogrify-ext)
 - Note: [Transmogrifier](https://github.com/kypflug/transmogrify-ext) requires you to bring your own API keys for article transformation and image generation. Azure OpenAI, OpenAI, Anthropic (Claude), and Google (Gemini) are supported.
 
