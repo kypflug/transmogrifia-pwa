@@ -13,7 +13,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Added
 
 - **Gift token redemption** — Settings screen has a "Gift Token" section where users can enter a passphrase from a friend to import preconfigured AI/cloud/sharing settings.
-- **Admin script `scripts/create-gift-token.ts`** — Encrypts the admin's settings with a passphrase, uploads to Azure Blob Storage. Supports `--revoke` to delete a token's blob.
+
+### Removed
+
+- **Admin script `create-gift-token.ts`** — Moved to the `transmogrifier-api` repo.
 
 ---
 
