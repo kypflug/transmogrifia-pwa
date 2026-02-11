@@ -401,23 +401,11 @@ body.is-offline .offline-banner {
     min-height: env(titlebar-area-height, auto);
   }
 
-  /* Article header in the reading pane: wrap to two rows so actions sit below controls */
+  /* Article header: clear window controls on the right */
   .article-header {
-    flex-wrap: wrap;
     padding-top: calc(env(titlebar-area-y, 0px) + 8px);
-    min-height: env(titlebar-area-height, auto);
-  }
-
-  /* Title/meta row: span full width, clear window controls on the right */
-  .article-header-info {
-    flex-basis: 100%;
     padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 8px);
-  }
-
-  /* Action buttons: right-align on the second row beneath the controls */
-  .article-header-actions {
-    margin-left: auto;
-    margin-top: -4px;
+    min-height: env(titlebar-area-height, auto);
   }
 
   /* Reading pane itself is draggable when no article header is visible */
