@@ -19,6 +19,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Added
 
+- **WCO reader titlebar** — Added a surface-colored titlebar strip across the reader pane in Window Controls Overlay mode when no article is selected (or while an article is generating), preventing a color mismatch between the sidebar header and the empty reading area.
 - **Gift token redemption** — Settings screen has a "Gift Token" section where users can enter a passphrase from a friend to import preconfigured AI/cloud/sharing settings.
 
 ---

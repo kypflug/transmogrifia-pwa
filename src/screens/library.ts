@@ -177,6 +177,7 @@ export function renderLibrary(root: HTMLElement): void {
       <div class="resize-handle" id="resizeHandle"></div>
 
       <main class="reading-pane" id="readingPane">
+        <div class="reader-titlebar" id="readerTitlebar"></div>
         <div class="reader-placeholder" id="readerPlaceholder">
           <span class="reader-placeholder-icon">📖</span>
           <p>Select an article to start reading</p>
@@ -921,6 +922,10 @@ function showReaderState(state: 'placeholder' | 'loading' | 'content' | 'error' 
   content.classList.toggle('hidden', state !== 'content');
   error.classList.toggle('hidden', state !== 'error');
   progress.classList.toggle('hidden', state !== 'progress');
+
+  // Hide the WCO titlebar strip when the article header is visible
+  const titlebar = document.getElementById('readerTitlebar');
+  if (titlebar) titlebar.classList.toggle('hidden', state === 'content');
 
   if (state === 'error' && errorMsg) {
     document.getElementById('readerErrorMsg')!.textContent = errorMsg;

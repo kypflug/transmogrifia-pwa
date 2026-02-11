@@ -9,6 +9,32 @@
   touch-action: pan-y pinch-zoom;
 }
 
+/* ===== WCO Titlebar (reader pane, no article selected) ===== */
+.reader-titlebar {
+  display: none;
+}
+
+@media (display-mode: window-controls-overlay) {
+  .reader-titlebar {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    background: var(--edge-surface-raised);
+    min-height: env(titlebar-area-height, 32px);
+    border-bottom: 1px solid var(--edge-border-subtle);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  /* Hide when article header is visible — it has its own titlebar region */
+  .reading-pane:has(.reader-content:not(.hidden)) .reader-titlebar {
+    display: none;
+  }
+}
+
 /* ===== Placeholder ===== */
 .reader-placeholder {
   display: flex;
