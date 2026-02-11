@@ -14,9 +14,9 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 - **Gift token redemption** — Settings screen has a "Gift Token" section where users can enter a passphrase from a friend to import preconfigured AI/cloud/sharing settings.
 
-### Removed
+### Fixed
 
-- **Admin script `create-gift-token.ts`** — Moved to the `transmogrifier-api` repo.
+- **Gift token 404** — Hardcoded the gift blob storage URL instead of relying on `VITE_GIFT_BLOB_BASE` env var, which was unset and caused fetches to resolve against the PWA's own domain (404).
 
 ---
 

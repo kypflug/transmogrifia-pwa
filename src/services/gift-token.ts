@@ -22,7 +22,7 @@ import { saveSettings } from './settings';
 import type { TransmogrifierSettings } from '../types';
 
 /** Base URL of the blob container that hosts encrypted gift config files. */
-const GIFT_BLOB_BASE = import.meta.env.VITE_GIFT_BLOB_BASE ?? '';
+const GIFT_BLOB_BASE = 'https://transmogstorage.blob.core.windows.net/giftconfigs';
 
 // ─── Hash helper ────────────────
 
