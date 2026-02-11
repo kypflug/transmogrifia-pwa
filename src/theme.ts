@@ -17,11 +17,11 @@ export function applyTheme(theme?: Theme): void {
 
   if (theme) saveTheme(theme);
 
-  // Update meta theme-color to match surface color
+  // Update meta theme-color to match surface-raised (used by sidebar/article/settings headers)
   const colors: Record<string, string> = {
-    light: '#FAFAFA',
-    dark: '#1B1B1F',
-    sepia: '#F4ECD8',
+    light: '#FFFFFF',
+    dark: '#2B2B30',
+    sepia: '#FBF6EB',
   };
   const metaEl = document.querySelector('meta[name="theme-color"]');
   if (metaEl) {

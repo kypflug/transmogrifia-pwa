@@ -13,6 +13,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Fixed
 
 - **Gift token settings not appearing** — After redeeming a gift token, imported settings were not displayed in the form (fields appeared blank with a misleading "reload to apply" message). Now re-renders the full settings screen so values appear immediately.
+- **WCO titlebar color mismatch** — Window Controls Overlay background (`theme-color`) now uses `--edge-surface-raised` values (`#FFFFFF`/`#2B2B30`/`#FBF6EB`) instead of `--edge-surface`, matching the sidebar, article, and settings headers exactly
 
 ### Added
 
