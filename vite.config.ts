@@ -35,6 +35,9 @@ export default defineConfig({
             url: 'url',
           },
         },
+        launch_handler: {
+          client_mode: 'navigate-existing',
+        },
         icons: [
           { src: 'icons/icon-48.png', sizes: '48x48', type: 'image/png' },
           { src: 'icons/icon-128.png', sizes: '128x128', type: 'image/png' },

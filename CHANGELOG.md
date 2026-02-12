@@ -4,11 +4,11 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [1.3.0] — 2026-02-12
 
 ### Added
 
-- **npm-env helper script** — `scripts/npm-env.mjs` loads `.env` into the shell environment before running `npm`, so `NPM_TOKEN` for GitHub Packages auth doesn't need to be set globally. Run `node scripts/npm-env.mjs install` instead of `npm install`.
+- **Reuse existing window on share** — Added `launch_handler` with `client_mode: "navigate-existing"` to the manifest so share-target activations reuse an open PWA window instead of spawning a new one.
 
 ### Fixed
 
