@@ -109,6 +109,44 @@ export async function getCachedMeta(): Promise<OneDriveArticleMeta[]> {
   });
 }
 
+/**
+ * Replace the metadata cache with the authoritative list from OneDrive and
+ * remove orphaned HTML entries whose articles no longer exist.
+ * Used after a full re-sync (first load or delta-token reset) to ensure the
+ * local cache exactly mirrors what's on the server.
+ */
+export async function reconcileCache(
+  currentArticles: OneDriveArticleMeta[],
+): Promise<OneDriveArticleMeta[]> {
+  const currentIds = new Set(currentArticles.map(m => m.id));
+  const database = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    const metaStore = tx.objectStore(META_STORE);
+    const htmlStore = tx.objectStore(HTML_STORE);
+
+    // Replace all metadata
+    metaStore.clear();
+    for (const meta of currentArticles) {
+      metaStore.put(meta);
+    }
+
+    // Remove HTML blobs for articles that no longer exist on the server
+    const htmlKeyReq = htmlStore.getAllKeys();
+    htmlKeyReq.onsuccess = () => {
+      for (const key of htmlKeyReq.result) {
+        if (!currentIds.has(String(key))) {
+          htmlStore.delete(key);
+        }
+      }
+    };
+
+    tx.oncomplete = () => resolve(currentArticles);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 /** Cache article HTML */
 export async function cacheHtml(id: string, html: string): Promise<void> {
   const database = await getDB();

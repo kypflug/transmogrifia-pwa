@@ -19,6 +19,8 @@ export interface DeltaSyncResult {
   upserted: OneDriveArticleMeta[];
   /** IDs of deleted articles */
   deleted: string[];
+  /** True when the entire article list was fetched (not incremental) — caller should reconcile cache */
+  fullSync: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export interface DeltaSyncResult {
 export async function syncArticles(): Promise<DeltaSyncResult> {
   const headers = await authHeaders();
   const savedToken = safeGetItem(DELTA_TOKEN_KEY);
+  const isFullSync = !savedToken;
 
   // Use saved delta link if available, otherwise start fresh
   let url: string | null = savedToken
@@ -37,6 +40,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
 
   const upserted: OneDriveArticleMeta[] = [];
   const deleted: string[] = [];
+  let hasDownloadFailures = false;
 
   try {
     while (url) {
@@ -47,7 +51,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
           // Folder doesn't exist yet or delta token expired — fall back to full list
           safeRemoveItem(DELTA_TOKEN_KEY);
           const allMeta = await listArticles();
-          return { upserted: allMeta, deleted: [] };
+          return { upserted: allMeta, deleted: [], fullSync: true };
         }
         const body = await res.text().catch(() => '');
         throw new Error(`Delta sync failed: ${res.status} ${body}`);
@@ -60,8 +64,8 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
         const name = item.name as string | undefined;
         if (!name) continue;
 
-        // Check if item was deleted
-        if (item.deleted) {
+        // Check if item was deleted (Graph uses both `deleted` facet and `@removed` annotation)
+        if (item.deleted || item['@removed']) {
           if (name.endsWith('.json')) {
             deleted.push(name.replace('.json', ''));
           } else if (name.endsWith('.html')) {
@@ -87,15 +91,24 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
           upserted.push(meta);
         } catch (err) {
           console.warn('Skipping unreadable metadata:', name, err);
+          hasDownloadFailures = true;
         }
       }
 
-      // Save the delta link for next sync, or follow nextLink for more pages
+      // Follow nextLink for more pages, or save the delta link when done
       const deltaLink = data['@odata.deltaLink'] as string | undefined;
       const nextLink = data['@odata.nextLink'] as string | undefined;
 
       if (deltaLink) {
-        safeSetItem(DELTA_TOKEN_KEY, deltaLink);
+        // Only persist the delta token if ALL items were successfully downloaded.
+        // If any downloads failed, the next sync will re-fetch from the last
+        // good token and retry the failed items.
+        if (!hasDownloadFailures) {
+          safeSetItem(DELTA_TOKEN_KEY, deltaLink);
+        } else {
+          console.warn('Delta token not saved — %d metadata download(s) failed; will retry next sync',
+            upserted.length === 0 ? 'all' : 'some');
+        }
         url = null; // done
       } else {
         url = nextLink || null;
@@ -112,7 +125,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   // De-duplicate deleted IDs
   const uniqueDeleted = [...new Set(deleted)];
 
-  return { upserted, deleted: uniqueDeleted };
+  return { upserted, deleted: uniqueDeleted, fullSync: isFullSync };
 }
 
 /** Clear the saved delta token (used when signing out / clearing cache) */

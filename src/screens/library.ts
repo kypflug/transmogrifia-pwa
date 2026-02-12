@@ -11,6 +11,7 @@ import {
   clearCache,
   deleteCachedArticle,
   mergeDeltaIntoCache,
+  reconcileCache,
 } from '../services/cache';
 import {
   getSortOrder,
@@ -279,20 +280,20 @@ async function loadArticles(): Promise<void> {
     setSyncIndicator(true);
     const delta = await syncArticles();
 
-    if (delta.upserted.length > 0 || delta.deleted.length > 0) {
-      // Merge changes into cache and update in-memory list
+    if (delta.fullSync) {
+      // Full re-sync (first load or expired delta token):
+      // reconcile cache to exactly mirror OneDrive, removing stale entries
+      articles = await reconcileCache(delta.upserted);
+      cachedIds = await getCachedHtmlIds();
+      renderList();
+      updateFooter();
+    } else if (delta.upserted.length > 0 || delta.deleted.length > 0) {
+      // Incremental sync: merge changes into existing cache
       articles = await mergeDeltaIntoCache(delta.upserted, delta.deleted);
 
       // Remove deleted IDs from cached HTML set
       for (const id of delta.deleted) cachedIds.delete(id);
 
-      renderList();
-      updateFooter();
-    } else if (cached.length === 0) {
-      // First load with no cache — articles are already in the delta result
-      // (delta on first run returns everything, but upserted will be empty
-      //  only if there are truly no articles)
-      articles = await getCachedMeta();
       renderList();
       updateFooter();
     }
