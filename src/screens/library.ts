@@ -502,12 +502,14 @@ async function openArticle(id: string): Promise<void> {
       overflow-x: hidden !important;
       touch-action: pan-y pinch-zoom;
       overscroll-behavior: none;
+      height: auto !important;
     }
     body {
       max-width: 100vw !important;
       overflow: visible !important;
       touch-action: pan-y pinch-zoom;
       overscroll-behavior: none;
+      height: auto !important;
     }
     img, video, iframe, embed, object, table, pre, code, svg {
       max-width: 100% !important;
@@ -515,6 +517,8 @@ async function openArticle(id: string): Promise<void> {
       box-sizing: border-box !important;
     }
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
+    /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
+    .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
   </style>`;
 
   // Set onload BEFORE srcdoc — srcdoc iframes can fire load for about:blank

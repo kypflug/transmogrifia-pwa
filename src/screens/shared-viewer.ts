@@ -117,7 +117,9 @@ export async function renderSharedViewer(
       ${baseTag}
       <style>
         .remix-save-fab { display: none !important; }
-        html, body { overflow-x: hidden; max-width: 100vw; }
+        html, body { overflow-x: hidden; max-width: 100vw; height: auto !important; }
+        /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
+        .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
       </style>
     `;
     const htmlWithOverrides = html.includes('</head>')
