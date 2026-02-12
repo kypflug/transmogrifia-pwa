@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **npm-env helper script** — `scripts/npm-env.mjs` loads `.env` into the shell environment before running `npm`, so `NPM_TOKEN` for GitHub Packages auth doesn't need to be set globally. Run `node scripts/npm-env.mjs install` instead of `npm install`.
+
 ### Fixed
 
 - **Stale articles persisting after deletion** — When the delta token expired (HTTP 410) or on first sync, the PWA fell back to a full article list but merged it into the existing cache without removing entries that no longer exist on OneDrive. Added `reconcileCache()` which replaces metadata and prunes orphaned HTML, ensuring the cache exactly mirrors the server after a full re-sync.
