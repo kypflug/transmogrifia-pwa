@@ -401,10 +401,23 @@ body.is-offline .offline-banner {
     min-height: env(titlebar-area-height, auto);
   }
 
-  /* Article header: push content below the titlebar area, center vertically */
+  /* Article header: title/meta centered in the titlebar row, buttons below */
   .article-header {
-    padding-top: calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 32px) + 4px);
-    align-items: center;
+    flex-wrap: wrap;
+    padding-top: env(titlebar-area-y, 0px);
+    box-sizing: border-box;
+  }
+
+  .article-header-info {
+    flex-basis: 100%;
+    min-height: env(titlebar-area-height, 32px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .article-header-actions {
+    margin-left: auto;
   }
 
   /* Reading pane itself is draggable when no article header is visible */
