@@ -62,11 +62,11 @@ function releaseActiveBlobUrls(): void {
 async function resolveImagesForHtml(html: string, meta: OneDriveArticleMeta): Promise<string> {
   if (!meta.images || meta.images.length === 0) return html;
 
-  const assetsById = new Map(meta.images.map(asset => [asset.id, asset]));
+  const assetsById = new Map(meta.images.map((asset: OneDriveImageAsset) => [asset.id, asset] as const));
   const assetsBySrc = new Map(
     meta.images
-      .filter(asset => asset.originalUrl)
-      .map(asset => [asset.originalUrl as string, asset]),
+      .filter((asset: OneDriveImageAsset) => asset.originalUrl)
+      .map((asset: OneDriveImageAsset) => [asset.originalUrl as string, asset] as const),
   );
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
