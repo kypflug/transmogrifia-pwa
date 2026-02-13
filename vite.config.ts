@@ -54,6 +54,36 @@ export default defineConfig({
             urlPattern: /^https:\/\/graph\.microsoft\.com\/.*/i,
             handler: 'NetworkOnly',
           },
+          // Cache shared article HTML blobs — immutable once published
+          {
+            urlPattern: /^https:\/\/[a-z0-9]+\.blob\.core\.windows\.net\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'shared-article-blobs',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          // Cache share code resolution responses
+          {
+            urlPattern: /\/api\/s\/[A-Za-z0-9]+$/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'share-resolve',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60, // 1 hour (matches server Cache-Control)
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
         ],
       },
     }),

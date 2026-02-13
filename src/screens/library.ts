@@ -99,6 +99,13 @@ function findImageAsset(
   if (assetId && assetsById.has(assetId)) return assetsById.get(assetId);
 
   const src = img.getAttribute('src');
+
+  // Match tmg-asset:{assetId} scheme — extract the ID and look up directly
+  if (src?.startsWith('tmg-asset:')) {
+    const id = src.slice('tmg-asset:'.length);
+    if (assetsById.has(id)) return assetsById.get(id);
+  }
+
   if (src && assetsBySrc.has(src)) return assetsBySrc.get(src);
 
   const originalSrc = img.getAttribute('data-tmg-asset-src');
@@ -857,7 +864,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       const expiresAt = expirationDays > 0 ? Date.now() + expirationDays * 24 * 60 * 60 * 1000 : undefined;
 
       try {
-        const result = await shareArticle(meta.id, html, meta.title, meta.originalUrl, expiresAt);
+        const result = await shareArticle(meta.id, html, meta.title, meta.originalUrl, expiresAt, meta.images);
 
         // Update meta
         meta.sharedUrl = result.shareUrl;

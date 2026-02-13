@@ -2,10 +2,16 @@ import { getAccessToken } from './auth';
 import type { OneDriveArticleMeta, UserProfile } from '../types';
 import type { SyncEncryptedEnvelope, LegacyEncryptedEnvelope } from './crypto';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
-
-const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
-const APP_FOLDER = 'articles';
-const SETTINGS_PATH = 'settings.enc.json';
+import {
+  GRAPH_BASE,
+  APP_FOLDER,
+  SETTINGS_FILE,
+  articleHtmlPath,
+  articleMetaPath,
+  graphContentUrl,
+  graphFolderChildrenUrl,
+  graphItemUrl,
+} from '@kypflug/transmogrifier-core';
 const DELTA_TOKEN_KEY = 'transmogrifia_delta_token';
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -144,7 +150,7 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
   // Don't use $filter — it's not supported on consumer OneDrive.
   // Filter for .json files client-side instead.
   let url: string | null =
-    `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}:/children` +
+    graphFolderChildrenUrl(APP_FOLDER) +
     `?$select=name&$top=200`;
 
   while (url) {
@@ -182,7 +188,7 @@ async function downloadMeta(
   headers: Record<string, string>,
 ): Promise<OneDriveArticleMeta> {
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}.json:/content`,
+    graphContentUrl(articleMetaPath(id)),
     { headers },
   );
   if (!res.ok) throw new Error(`Download meta failed: ${res.status}`);
@@ -195,7 +201,7 @@ async function downloadMeta(
 export async function downloadArticleHtml(id: string): Promise<string> {
   const headers = await authHeaders();
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}.html:/content`,
+    graphContentUrl(articleHtmlPath(id)),
     { headers },
   );
   if (!res.ok) throw new Error(`Download HTML failed: ${res.status}`);
@@ -208,7 +214,7 @@ export async function downloadArticleHtml(id: string): Promise<string> {
 export async function uploadMeta(meta: OneDriveArticleMeta): Promise<void> {
   const headers = await authHeaders();
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${meta.id}.json:/content`,
+    graphContentUrl(articleMetaPath(meta.id)),
     {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -224,15 +230,15 @@ export async function uploadMeta(meta: OneDriveArticleMeta): Promise<void> {
 export async function deleteArticle(id: string): Promise<void> {
   const headers = await authHeaders();
   const results = await Promise.allSettled([
-    fetch(`${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}.json`, {
+    fetch(graphItemUrl(articleMetaPath(id)), {
       method: 'DELETE',
       headers,
     }),
-    fetch(`${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}.html`, {
+    fetch(graphItemUrl(articleHtmlPath(id)), {
       method: 'DELETE',
       headers,
     }),
-    fetch(`${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}/${id}`, {
+    fetch(graphItemUrl(`${APP_FOLDER}/${id}`), {
       method: 'DELETE',
       headers,
     }),
@@ -250,7 +256,7 @@ export async function deleteArticle(id: string): Promise<void> {
 export async function downloadArticleAsset(drivePath: string): Promise<Blob> {
   const headers = await authHeaders();
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${drivePath}:/content`,
+    graphContentUrl(drivePath),
     { headers },
   );
   if (!res.ok) throw new Error(`Download asset failed: ${res.status}`);
@@ -282,7 +288,7 @@ export interface CloudSettingsFile {
 export async function downloadSettings(): Promise<CloudSettingsFile | null> {
   const headers = await authHeaders();
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${SETTINGS_PATH}:/content`,
+    graphContentUrl(SETTINGS_FILE),
     { headers },
   );
   if (res.status === 404) return null;
@@ -298,7 +304,7 @@ export async function uploadSettings(envelope: SyncEncryptedEnvelope, updatedAt:
   const headers = await authHeaders();
   const payload: CloudSettingsFile = { envelope, updatedAt };
   const res = await fetch(
-    `${GRAPH_BASE}/me/drive/special/approot:/${SETTINGS_PATH}:/content`,
+    graphContentUrl(SETTINGS_FILE),
     {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
