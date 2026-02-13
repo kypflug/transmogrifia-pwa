@@ -420,12 +420,13 @@ body.is-offline .offline-banner {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
   }
 
   .article-header-actions {
     grid-column: 2;
     grid-row: 2;
-    padding: 4px 8px 4px 12px;
+    padding: 0 8px 4px 12px;
     justify-self: end;
   }
 
