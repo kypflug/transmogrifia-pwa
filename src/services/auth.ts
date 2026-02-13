@@ -4,6 +4,7 @@ import {
   type AccountInfo,
   type AuthenticationResult,
   InteractionRequiredAuthError,
+  BrowserAuthError,
 } from '@azure/msal-browser';
 
 const CLIENT_ID = '4b54bcee-1c83-4f52-9faf-d0dfd89c5ac2';
@@ -179,6 +180,24 @@ export async function getAccessToken(): Promise<string> {
     }
     return result.accessToken;
   } catch (err) {
+    // In PWA standalone/WCO mode, iframe-based silent renewal often fails
+    // with BrowserAuthError (block_iframe_reload, timed_out). Retry using
+    // the refresh token (forceRefresh bypasses the iframe approach).
+    if (err instanceof BrowserAuthError) {
+      console.debug('[Auth] Silent iframe renewal failed, retrying with refresh token:', (err as Error).message);
+      try {
+        const result = await msal.acquireTokenSilent({
+          scopes: LOGIN_SCOPES,
+          account,
+          forceRefresh: true,
+        });
+        if (result.accessToken) return result.accessToken;
+      } catch (retryErr) {
+        console.warn('[Auth] Refresh token retry also failed:', retryErr);
+        // Fall through to interactive redirect
+      }
+    }
+
     if (err instanceof InteractionRequiredAuthError) {
       // Redirect for interactive token — silent refresh failed
       await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
