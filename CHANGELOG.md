@@ -12,7 +12,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Fixed
 
-- **WCO article header wastes vertical space** — In Window Controls Overlay mode the article header reserved the full titlebar height as dead space above the title. Now the title and metadata vertically center within the titlebar row, with action buttons wrapping to a second row below the window controls.
+- **WCO article header wastes vertical space** — In Window Controls Overlay mode the article header reserved the full titlebar height as dead space above the title. Switched to a CSS grid layout: the title and metadata span both rows and vertically center across the full visible titlebar, while the action buttons sit in a second row aligned with the window controls. The second column's min-width matches the window-controls width so the title text never extends behind the OS chrome.
 
 - **Stale articles persisting after deletion** — When the delta token expired (HTTP 410) or on first sync, the PWA fell back to a full article list but merged it into the existing cache without removing entries that no longer exist on OneDrive. Added `reconcileCache()` which replaces metadata and prunes orphaned HTML, ensuring the cache exactly mirrors the server after a full re-sync.
 - **Missing recent articles after transient download failure** — If downloading an individual article's metadata failed during delta sync, the article was silently skipped but the delta token still advanced past it. The article would never appear unless the delta token was manually reset. Now tracks download failures and withholds the delta token so the next sync retries the failed items.
