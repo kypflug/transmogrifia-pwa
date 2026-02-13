@@ -401,11 +401,10 @@ body.is-offline .offline-banner {
     min-height: env(titlebar-area-height, auto);
   }
 
-  /* Article header: clear window controls on the right */
+  /* Article header: push content below the titlebar area, center vertically */
   .article-header {
-    padding-top: calc(env(titlebar-area-y, 0px) + 8px);
-    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 8px);
-    min-height: env(titlebar-area-height, auto);
+    padding-top: calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 32px) + 4px);
+    align-items: center;
   }
 
   /* Reading pane itself is draggable when no article header is visible */
