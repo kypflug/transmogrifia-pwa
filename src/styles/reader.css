@@ -93,9 +93,7 @@
 
 /* ===== Article Header Bar ===== */
 .article-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  position: relative;
   padding: 12px 16px;
   border-bottom: 1px solid var(--edge-border-subtle);
   background: var(--edge-surface-raised);
@@ -130,7 +128,6 @@
 }
 
 .article-header-info {
-  flex: 1;
   min-width: 0;
 }
 
@@ -140,6 +137,13 @@
   color: var(--edge-text-primary);
   line-height: 1.3;
   margin: 0;
+  /* leave room for absolutely-positioned action buttons */
+  padding-right: 152px;
+  /* clamp to 2 lines with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .article-header-meta {
@@ -157,9 +161,11 @@
 }
 
 .article-header-actions {
+  position: absolute;
+  top: 10px;
+  right: 16px;
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
 }
 
 .action-btn {
@@ -469,6 +475,13 @@
 
   .mobile-back {
     display: flex !important;
+    position: absolute;
+    top: 10px;
+    left: 8px;
+  }
+
+  .article-header-info {
+    padding-left: 32px;
   }
 
   .reader-fab {

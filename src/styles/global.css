@@ -420,6 +420,9 @@ body.is-offline .offline-banner {
     display: flex;
     flex-direction: column;
     justify-content: center;
+  }
+
+  .article-header-title {
     padding-right: 80px;
   }
 
