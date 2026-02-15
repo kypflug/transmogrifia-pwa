@@ -14,6 +14,8 @@ import {
   reconcileCache,
   getCachedImage,
   cacheImage,
+  getCachedImageColors,
+  cacheImageColor,
 } from '../services/cache';
 import {
   getSortOrder,
@@ -63,8 +65,11 @@ function releaseActiveBlobUrls(): void {
 
 /**
  * Resolve OneDrive image assets inside a live iframe document.
- * Called after the iframe has loaded so article text is visible immediately;
- * images pop in as they resolve from IndexedDB cache or OneDrive download.
+ * Two-phase approach for instant perceived load:
+ *  1. Synchronous: set dimensions + dominant-color placeholder on all matched
+ *     images so the layout is correct and visually filled immediately.
+ *  2. Async: download blobs from cache/OneDrive, swap in real images, extract
+ *     and cache dominant colors for next time.
  */
 async function resolveImagesInFrame(
   doc: Document,
@@ -81,27 +86,86 @@ async function resolveImagesInFrame(
 
   const images = Array.from(doc.querySelectorAll('img')) as HTMLImageElement[];
 
-  const tasks = images.map(async (img) => {
+  // Match images to assets and collect asset IDs for color lookup
+  const matched: { img: HTMLImageElement; asset: OneDriveImageAsset }[] = [];
+  for (const img of images) {
     const asset = findImageAsset(img, assetsById, assetsBySrc);
-    if (!asset) return;
+    if (asset) matched.push({ img, asset });
+  }
+
+  if (matched.length === 0) return;
+
+  // Phase 1: apply placeholders — dimensions + dominant color from cache
+  const assetIds = matched.map(m => m.asset.id);
+  const colors = await getCachedImageColors(meta.id, assetIds);
+
+  for (const { img, asset } of matched) {
+    // Set dimensions to prevent layout shift
+    if (asset.width && asset.height) {
+      img.setAttribute('width', String(asset.width));
+      img.setAttribute('height', String(asset.height));
+      img.style.aspectRatio = `${asset.width} / ${asset.height}`;
+    }
+    // Apply placeholder with dominant color (or neutral fallback)
+    const color = colors.get(asset.id);
+    img.classList.add('tmg-img-placeholder');
+    if (color) {
+      img.style.setProperty('--tmg-placeholder-color', color);
+    }
+  }
+
+  // Phase 2: load actual images
+  const tasks = matched.map(async ({ img, asset }) => {
     try {
-      // Check local cache first
       let blob = await getCachedImage(meta.id, asset.id);
+      const wasCacheMiss = !blob;
       if (!blob) {
-        // Cache miss: download from OneDrive and cache for next time
         blob = await downloadArticleAsset(asset.drivePath);
         cacheImage(meta.id, asset.id, blob).catch(() => {});
       }
       const blobUrl = URL.createObjectURL(blob);
       activeBlobUrls.push(blobUrl);
+
+      // Swap in real image — remove placeholder once loaded
+      img.onload = () => {
+        img.classList.remove('tmg-img-placeholder');
+        img.style.removeProperty('--tmg-placeholder-color');
+      };
       img.setAttribute('src', blobUrl);
       img.setAttribute('data-tmg-asset-id', asset.id);
+
+      // Extract and cache dominant color on first download
+      if (wasCacheMiss && !colors.has(asset.id)) {
+        extractDominantColor(blob).then(color => {
+          if (color) cacheImageColor(meta.id, asset.id, color).catch(() => {});
+        }).catch(() => {});
+      }
     } catch (err) {
+      img.classList.remove('tmg-img-placeholder');
       console.warn('Failed to resolve image asset:', asset.drivePath, err);
     }
   });
 
   await Promise.all(tasks);
+}
+
+/**
+ * Extract the dominant color from an image blob by drawing it to a tiny
+ * 1×1 canvas (the browser averages all pixels). Returns an rgb() string.
+ */
+async function extractDominantColor(blob: Blob): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(1, 1);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, 1, 1);
+    bitmap.close();
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `rgb(${r},${g},${b})`;
+  } catch {
+    return null;
+  }
 }
 
 function findImageAsset(
@@ -569,6 +633,24 @@ async function openArticle(id: string): Promise<void> {
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
     /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
     .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
+    /* Image placeholder: dominant-color background with shimmer animation */
+    @keyframes tmg-shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .tmg-img-placeholder {
+      --tmg-placeholder-color: rgba(128,128,128,0.15);
+      background: linear-gradient(
+        90deg,
+        var(--tmg-placeholder-color) 25%,
+        color-mix(in srgb, var(--tmg-placeholder-color), white 30%) 50%,
+        var(--tmg-placeholder-color) 75%
+      ) !important;
+      background-size: 200% 100% !important;
+      animation: tmg-shimmer 1.5s ease-in-out infinite !important;
+      object-fit: cover;
+      min-height: 48px;
+    }
   </style>`;
 
   // For cached articles, show content immediately — no spinner. The iframe

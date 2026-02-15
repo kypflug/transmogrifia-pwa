@@ -227,6 +227,61 @@ export async function cacheImage(
   });
 }
 
+/** Get the cached dominant color for an image, or null */
+export async function getCachedImageColor(
+  articleId: string,
+  assetId: string,
+): Promise<string | null> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readonly');
+    const req = tx.objectStore(IMAGE_STORE).get(`color:${articleId}/${assetId}`);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Store the dominant color for an image */
+export async function cacheImageColor(
+  articleId: string,
+  assetId: string,
+  color: string,
+): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readwrite');
+    tx.objectStore(IMAGE_STORE).put(color, `color:${articleId}/${assetId}`);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** Batch-read dominant colors for multiple images in a single transaction */
+export async function getCachedImageColors(
+  articleId: string,
+  assetIds: string[],
+): Promise<Map<string, string>> {
+  if (assetIds.length === 0) return new Map();
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readonly');
+    const store = tx.objectStore(IMAGE_STORE);
+    const results = new Map<string, string>();
+    let pending = assetIds.length;
+    for (const assetId of assetIds) {
+      const req = store.get(`color:${articleId}/${assetId}`);
+      req.onsuccess = () => {
+        if (req.result) results.set(assetId, req.result as string);
+        if (--pending === 0) resolve(results);
+      };
+      req.onerror = () => {
+        if (--pending === 0) resolve(results);
+      };
+    }
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 /** Delete all cached images for a specific article */
 export async function deleteCachedImages(articleId: string): Promise<void> {
   const database = await getDB();

@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.4.1] — 2026-02-14
+
+### Changed
+
+- **Dominant-color image placeholders** — While article images load from IndexedDB or OneDrive, each `<img>` now shows a shimmer animation tinted with the image's dominant color. The dominant color is extracted via a 1×1 `OffscreenCanvas` on first download and cached alongside the blob for instant retrieval on subsequent opens. Images with known `width`/`height` from metadata also get an `aspect-ratio` set immediately to prevent layout shift.
+
+---
+
 ## [1.4.0] — 2026-02-14
 
 ### Added
