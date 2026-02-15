@@ -76,7 +76,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
 
   try {
     while (url) {
-      const res: Response = await fetch(url, { headers });
+      const res: Response = await fetch(url, { headers, cache: 'no-store' });
 
       if (!res.ok) {
         if (res.status === 404 || res.status === 410) {
@@ -200,7 +200,7 @@ export async function bootstrapDeltaToken(
 
   try {
     while (url) {
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, cache: 'no-store' });
       if (!res.ok) return { newMetas: [], deletedIds: [] };
 
       const data: Record<string, unknown> = await res.json();
@@ -267,7 +267,7 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
     `?$select=name&$top=200`;
 
   while (url) {
-    const res: Response = await fetch(url, { headers });
+    const res: Response = await fetch(url, { headers, cache: 'no-store' });
 
     if (!res.ok) {
       if (res.status === 404) return []; // no articles folder yet
@@ -298,7 +298,7 @@ async function downloadMeta(
 ): Promise<OneDriveArticleMeta> {
   const res = await fetch(
     graphContentUrl(articleMetaPath(id)),
-    { headers },
+    { headers, cache: 'no-store' },
   );
   if (!res.ok) throw new Error(`Download meta failed: ${res.status}`);
   return res.json();
@@ -319,7 +319,7 @@ async function downloadMetaBatch(
     const results = await Promise.allSettled(
       batch.map(async (item) => {
         if (item.directUrl) {
-          const res = await fetch(item.directUrl);
+          const res = await fetch(item.directUrl, { cache: 'no-store' });
           if (!res.ok) throw new Error(`Direct download failed: ${res.status}`);
           return res.json() as Promise<OneDriveArticleMeta>;
         }
@@ -349,7 +349,7 @@ async function downloadIndex(
   headers: Record<string, string>,
 ): Promise<OneDriveArticleMeta[] | null> {
   try {
-    const res = await fetch(graphContentUrl(INDEX_FILE), { headers });
+    const res = await fetch(graphContentUrl(INDEX_FILE), { headers, cache: 'no-store' });
     if (res.status === 404) return null;
     if (!res.ok) return null;
     const data: ArticleIndex = await res.json();
@@ -389,7 +389,7 @@ export async function downloadArticleHtml(id: string): Promise<string> {
   const headers = await authHeaders();
   const res = await fetch(
     graphContentUrl(articleHtmlPath(id)),
-    { headers },
+    { headers, cache: 'no-store' },
   );
   if (!res.ok) throw new Error(`Download HTML failed: ${res.status}`);
   return res.text();
@@ -444,7 +444,7 @@ export async function downloadArticleAsset(drivePath: string): Promise<Blob> {
   const headers = await authHeaders();
   const res = await fetch(
     graphContentUrl(drivePath),
-    { headers },
+    { headers, cache: 'no-store' },
   );
   if (!res.ok) throw new Error(`Download asset failed: ${res.status}`);
   return res.blob();
@@ -455,7 +455,7 @@ export async function downloadArticleAsset(drivePath: string): Promise<Blob> {
  */
 export async function getUserProfile(): Promise<UserProfile> {
   const headers = await authHeaders();
-  const res = await fetch(`${GRAPH_BASE}/me`, { headers });
+  const res = await fetch(`${GRAPH_BASE}/me`, { headers, cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to fetch profile');
   return res.json();
 }
@@ -476,7 +476,7 @@ export async function downloadSettings(): Promise<CloudSettingsFile | null> {
   const headers = await authHeaders();
   const res = await fetch(
     graphContentUrl(SETTINGS_FILE),
-    { headers },
+    { headers, cache: 'no-store' },
   );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Download settings failed: ${res.status}`);

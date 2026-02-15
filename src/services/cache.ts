@@ -77,8 +77,37 @@ export async function mergeDeltaIntoCache(
   deleted: string[],
 ): Promise<OneDriveArticleMeta[]> {
   const database = await getDB();
+
+  // Phase 1: Read existing metadata to detect size changes (content regeneration)
+  const staleIds: string[] = [];
+  if (upserted.length > 0) {
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(META_STORE, 'readonly');
+      const metaStore = tx.objectStore(META_STORE);
+      let pending = upserted.length;
+      for (const meta of upserted) {
+        const req = metaStore.get(meta.id);
+        req.onsuccess = () => {
+          const existing = req.result as OneDriveArticleMeta | undefined;
+          if (existing && existing.size !== meta.size) {
+            staleIds.push(meta.id);
+          }
+          if (--pending === 0) resolve();
+        };
+        req.onerror = () => {
+          if (--pending === 0) resolve();
+        };
+      }
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // Phase 2: Apply changes + invalidate stale content
+  const stores = [META_STORE, HTML_STORE];
+  if (staleIds.length > 0) stores.push(IMAGE_STORE);
+
   return new Promise((resolve, reject) => {
-    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    const tx = database.transaction(stores, 'readwrite');
     const metaStore = tx.objectStore(META_STORE);
     const htmlStore = tx.objectStore(HTML_STORE);
 
@@ -91,6 +120,26 @@ export async function mergeDeltaIntoCache(
     for (const id of deleted) {
       metaStore.delete(id);
       htmlStore.delete(id);
+    }
+
+    // Invalidate cached HTML for articles whose size changed (regenerated content)
+    for (const id of staleIds) {
+      htmlStore.delete(id);
+    }
+
+    // Invalidate cached images for regenerated articles
+    if (staleIds.length > 0) {
+      const imgStore = tx.objectStore(IMAGE_STORE);
+      const imgKeyReq = imgStore.getAllKeys();
+      imgKeyReq.onsuccess = () => {
+        const staleSet = new Set(staleIds);
+        for (const key of imgKeyReq.result) {
+          const articleId = String(key).split('/')[0];
+          if (staleSet.has(articleId)) {
+            imgStore.delete(key);
+          }
+        }
+      };
     }
 
     tx.oncomplete = async () => {
@@ -163,24 +212,56 @@ export async function reconcileCache(
   });
 }
 
-/** Cache article HTML */
-export async function cacheHtml(id: string, html: string): Promise<void> {
+/** Wrapper stored in the HTML cache alongside the content */
+interface CachedHtmlEntry {
+  html: string;
+  /** Article size at cache time — used to detect regenerated articles */
+  size: number;
+}
+
+/** Cache article HTML with the article's size for staleness detection */
+export async function cacheHtml(id: string, html: string, size: number): Promise<void> {
   const database = await getDB();
+  const entry: CachedHtmlEntry = { html, size };
   return new Promise((resolve, reject) => {
     const tx = database.transaction(HTML_STORE, 'readwrite');
-    tx.objectStore(HTML_STORE).put(html, id);
+    tx.objectStore(HTML_STORE).put(entry, id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-/** Get cached article HTML (null if not cached) */
-export async function getCachedHtml(id: string): Promise<string | null> {
+/**
+ * Get cached article HTML.
+ * If `expectedSize` is provided, the cached entry is treated as stale (returns null)
+ * when the stored size doesn't match — this catches regenerated articles whose
+ * HTML content has changed on another device.
+ */
+export async function getCachedHtml(
+  id: string,
+  expectedSize?: number,
+): Promise<string | null> {
   const database = await getDB();
   return new Promise((resolve, reject) => {
     const tx = database.transaction(HTML_STORE, 'readonly');
     const req = tx.objectStore(HTML_STORE).get(id);
-    req.onsuccess = () => resolve(req.result ?? null);
+    req.onsuccess = () => {
+      const value = req.result;
+      if (value == null) return resolve(null);
+
+      // Legacy entries are plain strings (pre-staleness-tracking)
+      if (typeof value === 'string') {
+        // No size info — if caller requires a freshness check, treat as stale
+        return resolve(expectedSize != null ? null : value);
+      }
+
+      // New format: { html, size }
+      const entry = value as CachedHtmlEntry;
+      if (expectedSize != null && entry.size !== expectedSize) {
+        return resolve(null); // Content has changed — stale
+      }
+      return resolve(entry.html);
+    };
     req.onerror = () => reject(req.error);
   });
 }

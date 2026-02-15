@@ -555,8 +555,8 @@ async function openArticle(id: string): Promise<void> {
   const meta = articles.find(a => a.id === id);
   if (!meta) return;
 
-  // Check cache first
-  let html = await getCachedHtml(id);
+  // Check cache first — pass meta.size to detect regenerated articles
+  let html = await getCachedHtml(id, meta.size);
   const wasCached = !!html;
 
   if (!html) {
@@ -566,7 +566,7 @@ async function openArticle(id: string): Promise<void> {
 
     try {
       html = await downloadArticleHtml(id);
-      await cacheHtml(id, html);
+      await cacheHtml(id, html, meta.size);
       cachedIds.add(id);
       renderList(); // Update cloud badge
       updateFooter();
@@ -993,7 +993,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       }
 
       // Get article HTML
-      let html = await getCachedHtml(meta.id);
+      let html = await getCachedHtml(meta.id, meta.size);
       if (!html) {
         try {
           html = await downloadArticleHtml(meta.id);

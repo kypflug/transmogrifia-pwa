@@ -4,6 +4,16 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.4.2] — 2026-02-14
+
+### Fixed
+
+- **Stale articles on iOS** — Safari's aggressive HTTP cache could serve stale Graph API responses, causing the delta sync to miss new or regenerated articles. All Graph API `fetch` calls now use `cache: 'no-store'` to force network requests, matching the existing Workbox `NetworkOnly` strategy at the service-worker level.
+
+- **Regenerated articles served from stale cache** — When an article was regenerated on another device (new HTML content, same ID), the PWA continued to display the old cached HTML from IndexedDB. The HTML cache now stores the article's `size` at cache time. On subsequent opens, if the metadata `size` has changed (indicating regenerated content), the stale HTML is discarded and re-downloaded. The delta sync also proactively invalidates cached HTML and images for articles whose `size` changed.
+
+---
+
 ## [1.4.1] — 2026-02-14
 
 ### Fixed
