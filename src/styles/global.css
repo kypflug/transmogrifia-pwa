@@ -427,6 +427,7 @@ body.is-offline .offline-banner {
   }
 
   .article-header-actions {
+    position: static;
     grid-column: 2;
     grid-row: 2;
     padding: 0 8px 4px 12px;

@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [1.4.1] — 2026-02-14
 
+### Fixed
+
+- **WCO action buttons behind window controls** — The article header action buttons (favorite, share, original, delete) used absolute positioning that placed them at the top-right of the header, overlapping the OS window controls in Window Controls Overlay mode. Added `position: static` in the WCO media query so the buttons participate in the grid layout and render below the titlebar area as intended.
+
 ### Changed
 
 - **Dominant-color image placeholders** — While article images load from IndexedDB or OneDrive, each `<img>` now shows a shimmer animation tinted with the image's dominant color. The dominant color is extracted via a 1×1 `OffscreenCanvas` on first download and cached alongside the blob for instant retrieval on subsequent opens. Images with known `width`/`height` from metadata also get an `aspect-ratio` set immediately to prevent layout shift.
