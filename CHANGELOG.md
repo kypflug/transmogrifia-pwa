@@ -4,6 +4,27 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.4.0] — 2026-02-14
+
+### Added
+
+- **Lightweight article index** — The PWA now maintains a single `_index.json` file on OneDrive containing all article metadata. On first sync (or after iOS storage eviction), the app downloads this one file instead of fetching each article's metadata individually — reducing initial sync from ~N HTTP requests to 1. The index is rebuilt automatically after any sync that detects changes (new articles, deletions, favorites). A background `bootstrapDeltaToken` step pages through the Graph delta API to acquire a delta token for subsequent incremental syncs and catches any articles added by the extension since the index was last built.
+
+- **Image caching in IndexedDB** — Article images downloaded from OneDrive are now cached locally in a new `images` IndexedDB store (DB version bumped to 3). On subsequent article opens, images resolve from the local cache instead of re-downloading from OneDrive. Cached images are cleaned up when articles are deleted or the cache is cleared.
+
+### Changed
+
+- **Parallel metadata downloads** — Both `syncArticles()` and `listArticles()` now download article metadata in parallel batches (concurrency limit of 6) instead of sequentially. For the delta and list-fallback paths, this reduces sync time by roughly 5-6x.
+- **Deferred image resolution** — Article images are now resolved lazily after the iframe renders instead of blocking on image download/cache lookup before setting `srcdoc`. Cached articles appear instantly with text visible first; images pop in moments later from IndexedDB or OneDrive.
+- **`npm run update`** — Added a convenience script that runs `npm update` with `.env` loaded via `dotenv-cli` (needed for `GITHUB_NPM_TOKEN` to resolve the private registry).
+
+### Fixed
+
+- **iOS signs out constantly** — iOS aggressively kills PWA WKWebView processes when backgrounded, and can evict localStorage under storage pressure — wiping MSAL's token cache and making the app appear signed out. Added a three-layer fix: (1) MSAL cache mirror in IndexedDB (`msal-cache-backup.ts`), which is more durable than localStorage on iOS, restored automatically on cold start; (2) silent auth recovery via refresh token and `ssoSilent` before falling back to the sign-in screen; (3) proactive `visibilitychange` handler that refreshes the access token when the app resumes from background, preventing stale-token errors on the first Graph call.
+- **Flash of empty reader on mobile** — When opening an article on mobile, the reading pane is now shown immediately with the loading spinner before content starts downloading. Content is revealed only after the iframe has fully parsed and rendered, preventing a flash of blank content. Also improved iframe readiness detection to check `childElementCount` and gracefully handle the max-retry case.
+
+---
+
 ## [1.3.0] — 2026-02-12
 
 ### Added

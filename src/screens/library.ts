@@ -1,6 +1,6 @@
 import type { OneDriveArticleMeta, OneDriveImageAsset, SortOrder, FilterMode } from '../types';
 import { signOut, getUserDisplayName } from '../services/auth';
-import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken, downloadArticleAsset } from '../services/graph';
+import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken, downloadArticleAsset, rebuildIndex, bootstrapDeltaToken } from '../services/graph';
 import {
   getCachedMeta,
   cacheHtml,
@@ -12,6 +12,8 @@ import {
   deleteCachedArticle,
   mergeDeltaIntoCache,
   reconcileCache,
+  getCachedImage,
+  cacheImage,
 } from '../services/cache';
 import {
   getSortOrder,
@@ -59,8 +61,16 @@ function releaseActiveBlobUrls(): void {
   activeBlobUrls = [];
 }
 
-async function resolveImagesForHtml(html: string, meta: OneDriveArticleMeta): Promise<string> {
-  if (!meta.images || meta.images.length === 0) return html;
+/**
+ * Resolve OneDrive image assets inside a live iframe document.
+ * Called after the iframe has loaded so article text is visible immediately;
+ * images pop in as they resolve from IndexedDB cache or OneDrive download.
+ */
+async function resolveImagesInFrame(
+  doc: Document,
+  meta: OneDriveArticleMeta,
+): Promise<void> {
+  if (!meta.images || meta.images.length === 0) return;
 
   const assetsById = new Map(meta.images.map((asset: OneDriveImageAsset) => [asset.id, asset] as const));
   const assetsBySrc = new Map(
@@ -69,14 +79,19 @@ async function resolveImagesForHtml(html: string, meta: OneDriveArticleMeta): Pr
       .map((asset: OneDriveImageAsset) => [asset.originalUrl as string, asset] as const),
   );
 
-  const doc = new DOMParser().parseFromString(html, 'text/html');
   const images = Array.from(doc.querySelectorAll('img')) as HTMLImageElement[];
 
   const tasks = images.map(async (img) => {
     const asset = findImageAsset(img, assetsById, assetsBySrc);
     if (!asset) return;
     try {
-      const blob = await downloadArticleAsset(asset.drivePath);
+      // Check local cache first
+      let blob = await getCachedImage(meta.id, asset.id);
+      if (!blob) {
+        // Cache miss: download from OneDrive and cache for next time
+        blob = await downloadArticleAsset(asset.drivePath);
+        cacheImage(meta.id, asset.id, blob).catch(() => {});
+      }
       const blobUrl = URL.createObjectURL(blob);
       activeBlobUrls.push(blobUrl);
       img.setAttribute('src', blobUrl);
@@ -87,7 +102,6 @@ async function resolveImagesForHtml(html: string, meta: OneDriveArticleMeta): Pr
   });
 
   await Promise.all(tasks);
-  return doc.documentElement?.outerHTML || html;
 }
 
 function findImageAsset(
@@ -282,7 +296,7 @@ async function loadArticles(): Promise<void> {
     updateFooter();
   }
 
-  // 2. Sync in background via delta API
+  // 2. Sync in background via delta API (or article index)
   try {
     setSyncIndicator(true);
     const delta = await syncArticles();
@@ -294,6 +308,34 @@ async function loadArticles(): Promise<void> {
       cachedIds = await getCachedHtmlIds();
       renderList();
       updateFooter();
+
+      if (delta.usedIndex) {
+        // Index was used — bootstrap a delta token in the background so the
+        // next sync can be incremental, and catch any articles added since
+        // the index was last built.
+        const knownIds = new Set(delta.upserted.map(a => a.id));
+        bootstrapDeltaToken(knownIds).then(async (result) => {
+          let changed = false;
+          if (result.newMetas.length > 0) {
+            articles = await mergeDeltaIntoCache(result.newMetas, []);
+            changed = true;
+          }
+          if (result.deletedIds.length > 0) {
+            articles = await mergeDeltaIntoCache([], result.deletedIds);
+            for (const id of result.deletedIds) cachedIds.delete(id);
+            changed = true;
+          }
+          if (changed) {
+            renderList();
+            updateFooter();
+          }
+          // Rebuild the index with the fully up-to-date article list
+          rebuildIndex(articles).catch(() => {});
+        }).catch(() => {});
+      } else {
+        // Delta/list sync — rebuild the index with fresh data
+        rebuildIndex(articles).catch(() => {});
+      }
     } else if (delta.upserted.length > 0 || delta.deleted.length > 0) {
       // Incremental sync: merge changes into existing cache
       articles = await mergeDeltaIntoCache(delta.upserted, delta.deleted);
@@ -303,6 +345,9 @@ async function loadArticles(): Promise<void> {
 
       renderList();
       updateFooter();
+
+      // Rebuild the index to reflect changes
+      rebuildIndex(articles).catch(() => {});
     }
   } catch (err) {
     console.warn('Background sync failed:', err);
@@ -446,13 +491,15 @@ async function openArticle(id: string): Promise<void> {
   const meta = articles.find(a => a.id === id);
   if (!meta) return;
 
-  // Show loading
-  showReaderState('loading');
-
   // Check cache first
   let html = await getCachedHtml(id);
+  const wasCached = !!html;
 
   if (!html) {
+    // Only show loading spinner when we actually need to download
+    showReaderState('loading');
+    document.body.classList.add('mobile-reading');
+
     try {
       html = await downloadArticleHtml(id);
       await cacheHtml(id, html);
@@ -474,14 +521,9 @@ async function openArticle(id: string): Promise<void> {
   setupArticleActions(meta);
 
   releaseActiveBlobUrls();
-  let renderHtml = html;
-  try {
-    renderHtml = await resolveImagesForHtml(html, meta);
-  } catch (err) {
-    console.warn('Failed to resolve article images:', err);
-  }
 
-  // Render in iframe
+  // Render in iframe — set srcdoc immediately so article text appears
+  // without waiting for image resolution.
   const frame = document.getElementById('contentFrame') as HTMLIFrameElement;
   // Inject styles: hide extension UI + lock horizontal scroll + ensure vertical scroll
   //
@@ -529,6 +571,16 @@ async function openArticle(id: string): Promise<void> {
     .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
   </style>`;
 
+  // For cached articles, show content immediately — no spinner. The iframe
+  // will render in-place while images resolve lazily in the background.
+  // For downloaded articles the loading spinner is already visible; reveal
+  // content once the iframe is ready.
+  if (wasCached) {
+    showReaderState('content');
+    updateFabState(id);
+    document.body.classList.add('mobile-reading');
+  }
+
   // Set onload BEFORE srcdoc — srcdoc iframes can fire load for about:blank
   // before the real content; attaching handlers afterward risks missing it
   frame.onload = () => {
@@ -537,13 +589,24 @@ async function openArticle(id: string): Promise<void> {
     let attempts = 0;
     function trySetup() {
       const doc = frame.contentDocument;
-      if (!doc || !doc.body) {
-        if (++attempts < 10) requestAnimationFrame(trySetup);
+      if (!doc || !doc.body || !doc.body.childElementCount) {
+        if (++attempts < 10) {
+          requestAnimationFrame(trySetup);
+        } else if (id === currentId && !wasCached) {
+          showReaderState('content');
+          updateFabState(id);
+        }
         return;
       }
 
       fixAnchorLinks(frame);
       fixScrollBlocking(frame);
+
+      // Resolve OneDrive image assets lazily (text is already visible).
+      // meta is guaranteed non-null — openArticle returns early if not found.
+      resolveImagesInFrame(doc, meta!).catch(err =>
+        console.warn('Failed to resolve article images:', err),
+      );
 
       // Gestures — attach to the settled contentDocument
       destroyGestures();
@@ -562,19 +625,18 @@ async function openArticle(id: string): Promise<void> {
         const target = dir === 'prev' ? filtered[idx - 1] : filtered[idx + 1];
         if (target) openArticle(target.id);
       });
+
+      // For downloads, reveal content now that the iframe is ready.
+      // For cached articles, content is already visible.
+      if (id === currentId && !wasCached) {
+        showReaderState('content');
+        updateFabState(id);
+      }
     }
     requestAnimationFrame(trySetup);
   };
 
-  frame.srcdoc = renderHtml.replace('</head>', injectedStyles + '</head>');
-
-  showReaderState('content');
-
-  // Update FAB prev/next enabled state
-  updateFabState(id);
-
-  // Mobile: show reading pane
-  document.body.classList.add('mobile-reading');
+  frame.srcdoc = html.replace('</head>', injectedStyles + '</head>');
 }
 
 function goBack(): void {
@@ -675,6 +737,7 @@ async function toggleFavorite(id: string): Promise<void> {
   // Push to OneDrive
   try {
     await uploadMeta(meta);
+    rebuildIndex(articles).catch(() => {});
   } catch (err) {
     console.error('Failed to sync favorite:', err);
     // Revert
@@ -706,6 +769,7 @@ async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
     // Navigate back
     goBack();
     updateFooter();
+    rebuildIndex(articles).catch(() => {});
     showToast('Article deleted');
   } catch (err) {
     console.error('Failed to delete article:', err);

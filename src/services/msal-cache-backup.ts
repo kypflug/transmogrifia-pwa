@@ -1,0 +1,158 @@
+/**
+ * MSAL Cache Backup Service
+ *
+ * iOS aggressively evicts localStorage for PWAs — WKWebView process kills,
+ * storage pressure, and OS updates can all wipe MSAL's token cache.
+ * IndexedDB is significantly more durable on iOS.
+ *
+ * This service mirrors MSAL-related localStorage entries to IndexedDB after
+ * every successful auth operation, and restores them on cold start if
+ * localStorage was wiped.
+ */
+
+const DB_NAME = 'TransmogrifierAuthBackup';
+const DB_VERSION = 1;
+const STORE_NAME = 'msal-cache';
+const SNAPSHOT_KEY = 'msal-snapshot';
+
+/**
+ * Patterns that identify MSAL localStorage keys.
+ * MSAL v5 uses a mix of formats:
+ *  - Account/credential keys containing the authority host
+ *  - Metadata keys prefixed with "msal."
+ *  - Interaction/request state keys
+ *  - Our own account hint key
+ */
+const MSAL_KEY_PATTERNS = [
+  'login.microsoftonline.com',
+  'login.windows.net',
+  'msal.',
+  '4b54bcee-1c83-4f52-9faf-d0dfd89c5ac2', // client ID
+  'transmogrifia_account_hint',
+];
+
+/** Returns true if a localStorage key belongs to MSAL or our auth layer. */
+function isMsalKey(key: string): boolean {
+  return MSAL_KEY_PATTERNS.some(p => key.includes(p));
+}
+
+function openBackupDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Snapshot all MSAL-related localStorage entries to IndexedDB.
+ * Call after successful sign-in and token acquisition.
+ */
+export async function backupMsalCache(): Promise<void> {
+  try {
+    const snapshot: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && isMsalKey(key)) {
+        const val = localStorage.getItem(key);
+        if (val !== null) snapshot[key] = val;
+      }
+    }
+
+    // Only write if there's meaningful data (at least one account/token entry)
+    const hasTokenData = Object.keys(snapshot).some(
+      k => k.includes('login.microsoftonline.com') || k.includes('login.windows.net'),
+    );
+    if (!hasTokenData) return;
+
+    const db = await openBackupDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(snapshot, SNAPSHOT_KEY);
+      tx.oncomplete = () => {
+        console.debug('[AuthBackup] Saved %d MSAL keys to IndexedDB', Object.keys(snapshot).length);
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[AuthBackup] Failed to backup MSAL cache:', err);
+  }
+}
+
+/**
+ * Restore MSAL cache from IndexedDB if localStorage was wiped.
+ * Call BEFORE initialising MSAL so it picks up the restored tokens.
+ *
+ * Returns true if entries were restored (caller may want to log this).
+ */
+export async function restoreMsalCacheIfNeeded(): Promise<boolean> {
+  try {
+    // Check if localStorage already has MSAL data
+    let hasMsalData = false;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && isMsalKey(key) && (key.includes('login.microsoftonline.com') || key.includes('login.windows.net'))) {
+        hasMsalData = true;
+        break;
+      }
+    }
+
+    if (hasMsalData) return false; // localStorage is fine, no restore needed
+
+    // localStorage is empty — try to restore from IndexedDB
+    const db = await openBackupDB();
+    const snapshot = await new Promise<Record<string, string> | undefined>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(SNAPSHOT_KEY);
+      req.onsuccess = () => resolve(req.result as Record<string, string> | undefined);
+      req.onerror = () => reject(req.error);
+    });
+
+    if (!snapshot || Object.keys(snapshot).length === 0) return false;
+
+    // Restore each key to localStorage
+    let restored = 0;
+    for (const [key, value] of Object.entries(snapshot)) {
+      try {
+        localStorage.setItem(key, value);
+        restored++;
+      } catch {
+        // localStorage quota exceeded or unavailable — stop trying
+        break;
+      }
+    }
+
+    if (restored > 0) {
+      console.info('[AuthBackup] Restored %d MSAL keys from IndexedDB backup', restored);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('[AuthBackup] Failed to restore MSAL cache:', err);
+    return false;
+  }
+}
+
+/**
+ * Clear the IndexedDB backup (call on explicit sign-out).
+ */
+export async function clearMsalCacheBackup(): Promise<void> {
+  try {
+    const db = await openBackupDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(SNAPSHOT_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Best-effort cleanup
+  }
+}

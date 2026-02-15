@@ -1,10 +1,11 @@
 import type { OneDriveArticleMeta } from '../types';
 
 const DB_NAME = 'TransmogrifiaPWA';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const META_STORE = 'metadata';
 const HTML_STORE = 'html';
 const SETTINGS_STORE = 'settings';
+const IMAGE_STORE = 'images';
 
 let db: IDBDatabase | null = null;
 
@@ -29,6 +30,9 @@ async function getDB(): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(SETTINGS_STORE)) {
         database.createObjectStore(SETTINGS_STORE); // key-value store, key = 'envelope'
+      }
+      if (!database.objectStoreNames.contains(IMAGE_STORE)) {
+        database.createObjectStore(IMAGE_STORE); // key = "{articleId}/{assetId}", value = Blob
       }
     };
 
@@ -122,9 +126,10 @@ export async function reconcileCache(
   const database = await getDB();
 
   return new Promise((resolve, reject) => {
-    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    const tx = database.transaction([META_STORE, HTML_STORE, IMAGE_STORE], 'readwrite');
     const metaStore = tx.objectStore(META_STORE);
     const htmlStore = tx.objectStore(HTML_STORE);
+    const imgStore = tx.objectStore(IMAGE_STORE);
 
     // Replace all metadata
     metaStore.clear();
@@ -138,6 +143,17 @@ export async function reconcileCache(
       for (const key of htmlKeyReq.result) {
         if (!currentIds.has(String(key))) {
           htmlStore.delete(key);
+        }
+      }
+    };
+
+    // Remove cached images for articles that no longer exist
+    const imgKeyReq = imgStore.getAllKeys();
+    imgKeyReq.onsuccess = () => {
+      for (const key of imgKeyReq.result) {
+        const articleId = String(key).split('/')[0];
+        if (!currentIds.has(articleId)) {
+          imgStore.delete(key);
         }
       }
     };
@@ -180,6 +196,57 @@ export async function getCachedHtmlIds(): Promise<Set<string>> {
   });
 }
 
+// ─── Image cache ────────────────
+
+/** Get a cached image blob, or null if not cached */
+export async function getCachedImage(
+  articleId: string,
+  assetId: string,
+): Promise<Blob | null> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readonly');
+    const req = tx.objectStore(IMAGE_STORE).get(`${articleId}/${assetId}`);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Store an image blob in the cache */
+export async function cacheImage(
+  articleId: string,
+  assetId: string,
+  blob: Blob,
+): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readwrite');
+    tx.objectStore(IMAGE_STORE).put(blob, `${articleId}/${assetId}`);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** Delete all cached images for a specific article */
+export async function deleteCachedImages(articleId: string): Promise<void> {
+  const database = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(IMAGE_STORE, 'readwrite');
+    const store = tx.objectStore(IMAGE_STORE);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      const prefix = `${articleId}/`;
+      for (const key of req.result) {
+        if (String(key).startsWith(prefix)) {
+          store.delete(key);
+        }
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 /** Get cache statistics */
 export async function getCacheStats(): Promise<{ count: number; totalSize: number }> {
   const metas = await getCachedMeta();
@@ -191,8 +258,9 @@ export async function getCacheStats(): Promise<{ count: number; totalSize: numbe
   };
 }
 
-/** Delete a single article from cache (both meta and HTML) */
+/** Delete a single article from cache (both meta, HTML, and images) */
 export async function deleteCachedArticle(id: string): Promise<void> {
+  await deleteCachedImages(id);
   const database = await getDB();
   return new Promise((resolve, reject) => {
     const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
@@ -207,9 +275,10 @@ export async function deleteCachedArticle(id: string): Promise<void> {
 export async function clearCache(): Promise<void> {
   const database = await getDB();
   return new Promise((resolve, reject) => {
-    const tx = database.transaction([META_STORE, HTML_STORE], 'readwrite');
+    const tx = database.transaction([META_STORE, HTML_STORE, IMAGE_STORE], 'readwrite');
     tx.objectStore(META_STORE).clear();
     tx.objectStore(HTML_STORE).clear();
+    tx.objectStore(IMAGE_STORE).clear();
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

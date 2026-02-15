@@ -6,6 +6,7 @@ import {
   InteractionRequiredAuthError,
   BrowserAuthError,
 } from '@azure/msal-browser';
+import { backupMsalCache, clearMsalCacheBackup } from './msal-cache-backup';
 
 const CLIENT_ID = '4b54bcee-1c83-4f52-9faf-d0dfd89c5ac2';
 const REDIRECT_URI = window.location.origin + '/';
@@ -66,6 +67,8 @@ export async function initAuth(force = false): Promise<AuthenticationResult | nu
     // Persist account hint on successful redirect sign-in
     if (response?.account) {
       saveAccountHint(response.account);
+      // Mirror MSAL cache to IndexedDB (iOS localStorage durability)
+      backupMsalCache().catch(() => {});
     }
 
     return response;
@@ -157,6 +160,7 @@ export async function signOut(): Promise<void> {
 
   clearAccountHint();
   clearCachedUserId();
+  clearMsalCacheBackup().catch(() => {});
 
   await msal.logoutRedirect({
     account,
@@ -178,6 +182,8 @@ export async function getAccessToken(): Promise<string> {
     if (!result.accessToken) {
       throw new InteractionRequiredAuthError('empty_token', 'Silent token acquisition returned empty access token');
     }
+    // Keep IndexedDB backup fresh after every successful token acquisition
+    backupMsalCache().catch(() => {});
     return result.accessToken;
   } catch (err) {
     // In PWA standalone/WCO mode, iframe-based silent renewal often fails
@@ -191,7 +197,10 @@ export async function getAccessToken(): Promise<string> {
           account,
           forceRefresh: true,
         });
-        if (result.accessToken) return result.accessToken;
+        if (result.accessToken) {
+          backupMsalCache().catch(() => {});
+          return result.accessToken;
+        }
       } catch (retryErr) {
         console.warn('[Auth] Refresh token retry also failed:', retryErr);
         // Fall through to interactive redirect
@@ -290,4 +299,103 @@ function clearAccountHint(): void {
   try {
     localStorage.removeItem(ACCOUNT_HINT_KEY);
   } catch { /* */ }
+}
+
+/** Read the saved account hint (username + homeAccountId). */
+function getAccountHint(): { username: string; homeAccountId: string } | null {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_HINT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// ─── iOS resume recovery ───
+
+/**
+ * Attempt to silently recover auth state after an iOS cold restart wiped
+ * localStorage. Called from the resume handler in main.ts when `isSignedIn()`
+ * returns false but we know the user was previously signed in (account hint
+ * was restored from IndexedDB along with the MSAL cache).
+ *
+ * Strategy:
+ * 1. If MSAL has accounts after the IndexedDB restore, try acquireTokenSilent
+ *    with forceRefresh (uses refresh token, no iframe).
+ * 2. If that fails, try ssoSilent with the saved loginHint — this uses a
+ *    hidden iframe and may work if the user has an active Microsoft session.
+ * 3. If all else fails, return false and the caller shows the sign-in screen.
+ *
+ * Returns true if auth was recovered successfully.
+ */
+export async function tryRecoverAuth(): Promise<boolean> {
+  if (!msalInstance) return false;
+
+  // Step 1: check if MSAL found accounts after cache restore
+  const account = getAccount();
+  if (account) {
+    try {
+      const result = await msalInstance.acquireTokenSilent({
+        scopes: LOGIN_SCOPES,
+        account,
+        forceRefresh: true,
+      });
+      if (result.accessToken) {
+        console.info('[Auth] iOS recovery: silent token refresh succeeded');
+        backupMsalCache().catch(() => {});
+        return true;
+      }
+    } catch (err) {
+      console.debug('[Auth] iOS recovery: acquireTokenSilent failed:', (err as Error).message);
+    }
+  }
+
+  // Step 2: try ssoSilent with login hint from account hint
+  const hint = getAccountHint();
+  if (hint?.username) {
+    try {
+      const result = await msalInstance.ssoSilent({
+        scopes: LOGIN_SCOPES,
+        loginHint: hint.username,
+      });
+      if (result.account) {
+        saveAccountHint(result.account);
+        backupMsalCache().catch(() => {});
+        console.info('[Auth] iOS recovery: ssoSilent succeeded');
+        return true;
+      }
+    } catch (err) {
+      console.debug('[Auth] iOS recovery: ssoSilent failed:', (err as Error).message);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Proactively refresh the access token when the app resumes from background.
+ * Called on visibilitychange → visible. Prevents stale-token errors on the
+ * first Graph call after resume.
+ *
+ * Fails silently — if the token can't be refreshed, the next Graph call will
+ * handle the error with its own retry/redirect logic.
+ */
+export async function refreshTokenOnResume(): Promise<void> {
+  if (!msalInstance) return;
+  const account = getAccount();
+  if (!account) return;
+
+  try {
+    await msalInstance.acquireTokenSilent({
+      scopes: LOGIN_SCOPES,
+      account,
+      forceRefresh: true,
+    });
+    backupMsalCache().catch(() => {});
+    console.debug('[Auth] Proactive token refresh on resume succeeded');
+  } catch {
+    // Not critical — the next getAccessToken() call will handle refresh
+    console.debug('[Auth] Proactive token refresh on resume skipped/failed');
+  }
 }

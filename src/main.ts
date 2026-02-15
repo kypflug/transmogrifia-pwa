@@ -1,4 +1,5 @@
-import { initAuth, isSignedIn } from './services/auth';
+import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume } from './services/auth';
+import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
 import { renderSignIn } from './screens/sign-in';
 import { renderLibrary, showAddUrlModal } from './screens/library';
 import { renderSettings } from './screens/settings';
@@ -64,21 +65,40 @@ async function boot(app: HTMLElement): Promise<void> {
     return;
   }
 
+  // Restore MSAL cache from IndexedDB if iOS wiped localStorage
+  const cacheRestored = await restoreMsalCacheIfNeeded();
+  if (cacheRestored) {
+    console.info('[Boot] MSAL cache restored from IndexedDB backup');
+  }
+
   // initAuth() returns a non-null AuthenticationResult when this page load
   // is the result of a loginRedirect completing. In that case the user is
   // now signed in and we should go straight to the library.
   const redirectResponse = await initAuth();
 
   if (redirectResponse?.account || isSignedIn()) {
-    route(app);
-    window.addEventListener('hashchange', () => route(app));
-    handleShareTarget();
+    enterApp(app);
+  } else if (cacheRestored) {
+    // IndexedDB had auth data but MSAL didn't find valid accounts — try
+    // silent recovery (refresh token or SSO session) before giving up.
+    const recovered = await tryRecoverAuth();
+    if (recovered && isSignedIn()) {
+      console.info('[Boot] iOS recovery: auth restored without user interaction');
+      enterApp(app);
+    } else {
+      renderSignIn(app, () => enterApp(app));
+    }
   } else {
-    renderSignIn(app, () => {
-      route(app);
-      window.addEventListener('hashchange', () => route(app));
-    });
+    renderSignIn(app, () => enterApp(app));
   }
+}
+
+/** Transition to the main app: set up routing, share target, and resume handler. */
+function enterApp(app: HTMLElement): void {
+  route(app);
+  window.addEventListener('hashchange', () => route(app));
+  handleShareTarget();
+  setupResumeHandler();
 }
 
 function route(app: HTMLElement): void {
@@ -88,6 +108,32 @@ function route(app: HTMLElement): void {
   } else {
     renderLibrary(app);
   }
+}
+
+/**
+ * Proactively refresh the access token when the app resumes from background.
+ *
+ * On iOS, WKWebView processes are suspended aggressively. If the access token
+ * expired while backgrounded, the first Graph call after resume would fail and
+ * trigger a redirect to Microsoft login — which looks like being signed out.
+ * By refreshing early (on visibilitychange → visible), we ensure the token is
+ * fresh before any UI-initiated Graph call.
+ */
+function setupResumeHandler(): void {
+  let lastRefresh = Date.now();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+
+    // Throttle: don't refresh more than once per 2 minutes
+    const now = Date.now();
+    if (now - lastRefresh < 120_000) return;
+    lastRefresh = now;
+
+    refreshTokenOnResume().catch(() => {
+      // Non-critical — token refresh will happen on next Graph call
+    });
+  });
 }
 
 /**
