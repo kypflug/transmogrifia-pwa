@@ -194,6 +194,8 @@ Pattern: `[component]-[element]` with `-` separators. State modifiers are separa
 ## Documentation & Git Rules
 - **README.md:** Keep up to date with any new features, setup steps, or config changes
 - **CHANGELOG.md:** Add an entry for every meaningful change (new features, bug fixes, refactors). Use `## [Unreleased]` at the top and group entries under `### Added`, `### Changed`, `### Fixed`, `### Removed`
+- **Release workflow:** Treat `CHANGELOG.md` as the canonical release history. On release, move `Unreleased` entries into a versioned section, bump `package.json` to the same version, and (optionally) mirror a concise summary to a GitHub Release note.
+- **Release notes files:** If needed, store GitHub release-note drafts under `release-notes/<version>.md` so notes stay reviewable in-repo.
 - **Never push to remote** (`git push`) unless the user explicitly asks you to. Stage and commit locally only.
 
 ## Compatibility Contract (shared via `@kypflug/transmogrifier-core`)

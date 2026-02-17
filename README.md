@@ -64,6 +64,18 @@ Static output is written to `dist/`, ready for deployment.
 npm run preview
 ```
 
+## Release Process
+
+For this repo, `CHANGELOG.md` is the canonical release history.
+
+1. Keep new work under `## [Unreleased]` in `CHANGELOG.md`.
+2. At release time, move those entries into a versioned section (for example, `## [1.5.5] — 2026-02-17`).
+3. Bump `package.json` `version` to match the new changelog version.
+4. Tag and ship from that version.
+5. Optionally publish GitHub Release notes using the matching file under `release-notes/`.
+
+Practical rule: `CHANGELOG.md` is the source of truth; GitHub Release notes are a concise distribution format.
+
 ## Tech Stack
 
 | Layer | Technology |
