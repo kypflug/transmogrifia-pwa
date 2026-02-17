@@ -8,6 +8,10 @@ A Progressive Web App for reading your [Transmogrifier](https://github.com/kypfl
 
 **Library of Transmogrifia** is the companion reader. You can also add articles directly from the PWA using the **Add URL** feature (requires a cloud API endpoint and your own AI keys).
 
+## Architecture
+
+All service-level content — shared types, recipe definitions, AI/image provider dispatch, crypto helpers, blob-storage utilities, and OneDrive path constants — is authored in the **[transmogrifier-infra](https://github.com/kypflug/transmogrifier-infra)** monorepo and published as the [`@kypflug/transmogrifier-core`](https://github.com/kypflug/transmogrifier-infra/tree/master/packages/core) package on GitHub Packages. Both this PWA and the [Transmogrifier extension](https://github.com/kypflug/transmogrify-ext) consume it as an npm dependency, so shared logic is maintained in one place.
+
 ## Features
 
 - **Cloud library** — Browse all your transmogrified articles synced from OneDrive

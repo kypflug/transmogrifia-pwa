@@ -5,6 +5,17 @@
 ## What This Is
 Standalone PWA (Progressive Web App) for reading Transmogrifier articles on any device. Users sign in with their Microsoft account, and the app loads their saved transmogrifications from OneDrive. Users can also submit URLs for cloud transmogrification directly from the PWA.
 
+## Shared Core Package
+Service-level content — shared types, recipe definitions, AI/image provider dispatch, crypto helpers, blob-storage utilities, and OneDrive path constants — lives in the **`@kypflug/transmogrifier-core`** package, published from the `packages/core` workspace inside the private [`transmogrifier-infra`](https://github.com/kypflug/transmogrifier-infra) monorepo. Both this PWA and the [Transmogrifier extension](https://github.com/kypflug/transmogrify-ext) consume it as an npm dependency via GitHub Packages.
+
+This means most shared logic is authored once in `transmogrifier-infra` and consumed here via imports:
+- `src/types.ts` — re-exports shared types (`TransmogrifierSettings`, `UserAIConfig`, `OneDriveArticleMeta`, etc.)
+- `src/services/crypto.ts` — re-exports crypto functions (`encryptWithPassphrase`, `decryptWithPassphrase`, etc.)
+- `src/services/graph.ts` — imports OneDrive path constants (`ARTICLES_FOLDER`, `SETTINGS_PATH`)
+- `src/services/blob-storage.ts` — re-exports blob upload/share helpers and types
+
+When a shared type or utility needs to change, update it in `transmogrifier-infra/packages/core`, publish a new version, then `npm update` here.
+
 ## Tech Stack
 TypeScript (strict) | Vite | Vanilla TS | MSAL.js 2.x (`@azure/msal-browser`) | Microsoft Graph API | IndexedDB | vite-plugin-pwa (Workbox)
 
@@ -51,7 +62,7 @@ src/
 - **Hash routing:** `main.ts` routes between `#library` (default) and `#settings` via `hashchange`
 - **Settings encryption:** Two-tier model — device key (AES-256-GCM, non-extractable CryptoKey in IndexedDB) for local, user passphrase (PBKDF2 600k + AES-256-GCM) for OneDrive sync. Same crypto as the extension.
 - **Add URL:** Library toolbar has a "+ Add" button that opens a modal to submit a URL + recipe to the cloud API for transmogrification. Sends user's AI keys (BYOK) in the request body.
-- **Gift tokens:** Settings screen has a "Gift Token" section where users can enter a passphrase to import preconfigured settings. Admin encrypts `TransmogrifierSettings` with a passphrase (PBKDF2 + AES-256-GCM), uploads to `https://transmogstorage.blob.core.windows.net/giftconfigs/gift-{sha256-prefix}.enc.json`. User enters the passphrase to import settings. Token revocation = delete the blob. Admin script lives in the `transmogrifier-api` repo.
+- **Gift tokens:** Settings screen has a "Gift Token" section where users can enter a passphrase to import preconfigured settings. Admin encrypts `TransmogrifierSettings` with a passphrase (PBKDF2 + AES-256-GCM), uploads to `https://transmogstorage.blob.core.windows.net/giftconfigs/gift-{sha256-prefix}.enc.json`. User enters the passphrase to import settings. Token revocation = delete the blob. Admin script lives in the `transmogrifier-infra` repo.
 - **No `chrome.*` APIs** — this is a standard web app, not an extension
 
 ## OneDrive Storage Layout
@@ -185,23 +196,22 @@ Pattern: `[component]-[element]` with `-` separators. State modifiers are separa
 - **CHANGELOG.md:** Add an entry for every meaningful change (new features, bug fixes, refactors). Use `## [Unreleased]` at the top and group entries under `### Added`, `### Changed`, `### Fixed`, `### Removed`
 - **Never push to remote** (`git push`) unless the user explicitly asks you to. Stage and commit locally only.
 
-## Compatibility Contract (shared with extension)
+## Compatibility Contract (shared via `@kypflug/transmogrifier-core`)
 
-These types and formats must stay in sync between the extension and PWA:
+These types and formats are defined in `transmogrifier-infra/packages/core` and consumed by both the extension and PWA via the published `@kypflug/transmogrifier-core` package:
 
-| Surface | Extension file | PWA file |
+| Surface | Core source (`packages/core/src/`) | PWA consumer |
 |---|---|---|
-| `EncryptedEnvelope` | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
-| `LocalEncryptedEnvelope` | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
-| `device-key.ts` | `src/shared/device-key.ts` | `src/services/device-key.ts` |
-| `TransmogrifierSettings` | `src/shared/settings-service.ts` | `src/types.ts` |
-| `AIProviderSettings` / `ImageProviderSettings` | `src/shared/settings-service.ts` | `src/types.ts` |
-| `UserAIConfig` | `src/shared/types.ts` | `src/types.ts` |
-| PBKDF2 iterations (600,000) | `src/shared/crypto-service.ts` | `src/services/crypto.ts` |
-| Settings sync path | `settings.enc.json` | `SETTINGS_PATH` in `graph.ts` |
-| Queue request body | `src/shared/cloud-queue-service.ts` | `src/services/cloud-queue.ts` |
-| `OneDriveArticleMeta` | `src/shared/onedrive-service.ts` | `src/types.ts` |
-| OneDrive articles path | `articles/` | `APP_FOLDER` in `graph.ts` |
+| `EncryptedEnvelope` / `LocalEncryptedEnvelope` | `crypto.ts` | `src/services/crypto.ts` (re-export) |
+| `TransmogrifierSettings` | `types.ts` | `src/types.ts` (re-export) |
+| `AIProviderSettings` / `ImageProviderSettings` | `types.ts` | `src/types.ts` (re-export) |
+| `UserAIConfig` | `types.ts` | `src/types.ts` (re-export) |
+| PBKDF2 iterations (600,000) | `crypto.ts` | `src/services/crypto.ts` (re-export) |
+| `OneDriveArticleMeta` | `types.ts` | `src/types.ts` (re-export) |
+| OneDrive paths (`ARTICLES_FOLDER`, `SETTINGS_PATH`) | `onedrive-paths.ts` | `src/services/graph.ts` (import) |
+| Blob-storage helpers | `blob-storage.ts` | `src/services/blob-storage.ts` (re-export) |
+| Recipe definitions | `recipes.ts` | PWA has its own minimal `src/recipes.ts` (display-only subset) |
+| `device-key.ts` | — (PWA-local) | `src/services/device-key.ts` |
 
 ## Azure OpenAI API Patterns
 
@@ -310,11 +320,11 @@ Adapt the subject matter and composition details as needed, but keep the waterco
 Admin can issue revocable gift tokens that preconfigure the app with AI/cloud/sharing settings for friends.
 
 ### How It Works
-1. Admin runs `npx tsx scripts/create-gift-token.ts "passphrase"` (in the `transmogrifier-api` repo) — encrypts settings from `.env` with PBKDF2, uploads to Azure Blob Storage
+1. Admin runs `npx tsx scripts/create-gift-token.ts "passphrase"` (in the `transmogrifier-infra` repo) — encrypts settings from `.env` with PBKDF2, uploads to Azure Blob Storage
 2. Blob filename is `gift-{SHA256(passphrase)[0:16]}.enc.json` — passphrase never exposed in URL
 3. Blob container (`giftconfigs`) has anonymous blob-level read (no list) — can fetch by exact URL but can't enumerate
 4. User enters passphrase on settings screen → PWA hashes it to find the blob, fetches, decrypts, saves locally with device key
-5. To revoke: `npx tsx scripts/create-gift-token.ts --revoke "passphrase"` (in the `transmogrifier-api` repo) — deletes the blob
+5. To revoke: `npx tsx scripts/create-gift-token.ts --revoke "passphrase"` (in the `transmogrifier-infra` repo) — deletes the blob
 
 ### Env Vars (admin script only)
 ```

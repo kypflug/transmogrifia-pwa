@@ -6,9 +6,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [1.5.3] — 2026-02-17
 
+### Changed
+
+- **Documentation: shared core package** — Updated README and Copilot instructions to document that all service-level content (shared types, recipes, crypto, blob-storage helpers, etc.) is authored in the `transmogrifier-infra` monorepo and consumed by both the PWA and extension via the `@kypflug/transmogrifier-core` package. Updated the compatibility contract table to reference core source files instead of extension files.
+
 ### Fixed
 
 - **Grid overlap on fullbleed elements** — Recipes that nest full-viewport breakout sections (`.fullbleed` with `calc(50% - 50vw)` margins) inside multi-column grid layouts caused content to overflow its grid cell and overlap the aside column. Added CSS mitigations in both the shared viewer and library reader to contain fullbleed elements within their grid cell.
+
+- **Illustrated hero image left-aligned at wide viewports** — When `max-height: 72vh` combined with `aspect-ratio: 16/9` constrains the hero media container to narrower than the viewport, the block-level `.media` div defaulted to left alignment. Fixed at the recipe layer in `transmogrifier-infra` (hero media now uses `margin: 0 auto`); removed the defensive PWA override added earlier.
 
 - **`cap-reveal` animation class not forced visible** — The `cap-reveal` class used by some recipes for figcaption fade-in animations wasn't included in the sandbox animation override, leaving captions invisible when scripts are blocked. Added to the existing `.io, .reveal, .cap` selector.
 
