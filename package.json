@@ -1,6 +1,6 @@
 {
   "name": "transmogrifia-pwa",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Library of Transmogrifia — Read your transmogrified articles anywhere",
   "type": "module",
   "scripts": {
@@ -21,6 +21,6 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^5.1.0",
-    "@kypflug/transmogrifier-core": "^0.1.14"
+    "@kypflug/transmogrifier-core": "^0.1.21"
   }
 }
