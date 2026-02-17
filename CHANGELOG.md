@@ -4,6 +4,20 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+---
+
+## [1.5.5] — 2026-02-17
+
+### Fixed
+
+- **iPadOS standalone auth detection hardening** — `isIosStandalone()` now treats desktop-UA iPadOS (`MacIntel` + touch) as iOS standalone, so the iOS cold-start recovery path continues to skip `ssoSilent` iframe attempts that are unreliable in installed PWAs.
+
+- **Auth recovery debug breadcrumbs** — Added explicit `[Auth]` breadcrumbs for (1) desktop-UA iPadOS standalone detection and (2) `ssoSilent` skip decisions, making Safari remote-inspector cold-start diagnostics easier.
+
+---
+
 ## [1.5.4] — 2026-02-17
 
 ### Fixed

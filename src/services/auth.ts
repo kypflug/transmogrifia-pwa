@@ -32,7 +32,17 @@ function isIosStandalone(): boolean {
   const isStandalone =
     ('standalone' in navigator && (navigator as unknown as Record<string, unknown>).standalone === true) ||
     window.matchMedia('(display-mode: standalone)').matches;
-  return isStandalone && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  // iPadOS can present a desktop-class UA (Macintosh) in Safari/PWA mode.
+  // Treat MacIntel + touch as iPadOS so we still apply iOS-specific auth paths.
+  const isClassicIosUa = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIpadOsDesktopUa = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+
+  if (isStandalone && isIpadOsDesktopUa && !isClassicIosUa) {
+    console.debug('[Auth] Detected iPadOS desktop-UA standalone mode');
+  }
+
+  return isStandalone && (isClassicIosUa || isIpadOsDesktopUa);
 }
 
 let msalInstance: PublicClientApplication | null = null;
@@ -400,7 +410,7 @@ export async function tryRecoverAuth(): Promise<boolean> {
       }
     }
   } else {
-    console.debug('[Auth] iOS standalone — skipping ssoSilent (iframe blocked)');
+    console.debug('[Auth] iOS standalone detected — skipping ssoSilent (iframe blocked)');
   }
 
   return false;
