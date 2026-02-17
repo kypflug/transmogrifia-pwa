@@ -73,42 +73,55 @@ export async function initAuth(force = false): Promise<AuthenticationResult | nu
 
     return response;
   } catch (err) {
-    console.warn('handleRedirectPromise failed (non-fatal):', err);
+    console.warn('[Auth] handleRedirectPromise failed:', err);
     // Clear any stale interaction state that could block future sign-in attempts
     cleanUpStaleState();
 
-    // iOS recovery: if we had an account before the process kill, MSAL may
-    // have cleared its in-memory cache while processing stale redirect state.
-    // Re-create the instance so the next getAllAccounts() reads from a clean
+    // After cleanup, re-create MSAL so getAllAccounts() reads cleanly from
     // localStorage without stale interaction entries interfering.
-    if (hasAccountHint()) {
-      console.debug('iOS recovery: re-creating MSAL instance after stale state cleanup');
-      msalInstance = new PublicClientApplication(msalConfig);
-      await msalInstance.initialize();
-      redirectHandled = true;
-    }
+    // This applies to both iOS process-kill recovery and Windows PWA
+    // re-opens where stale redirect state causes handleRedirectPromise to throw.
+    console.debug('[Auth] Re-creating MSAL instance after stale state cleanup');
+    msalInstance = new PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    redirectHandled = true;
 
     return null;
   }
 }
 
 /**
- * Remove stale MSAL interaction-in-progress keys from localStorage.
- * Failed redirects or interrupted popup flows can leave these behind,
- * causing subsequent sign-in attempts to fail with interaction_in_progress.
+ * Remove stale MSAL interaction/redirect state from localStorage.
+ * Failed redirects, interrupted popups, or unclean PWA shutdowns can leave
+ * temporary keys behind that cause handleRedirectPromise() to throw on the
+ * next page load. We aggressively remove ALL msal-prefixed temporary keys
+ * (interaction state, request params/state/nonce/origin, temp cache) rather
+ * than only a narrow subset, to prevent recurring cycles.
  */
 function cleanUpStaleState(): void {
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.includes('interaction.status') || key.includes('request.params'))) {
+      if (!key) continue;
+      // Match all MSAL interaction & temporary redirect keys
+      if (
+        key.includes('interaction.status') ||
+        key.includes('request.params') ||
+        key.includes('request.state') ||
+        key.includes('request.nonce') ||
+        key.includes('request.origin') ||
+        key.includes('request.authority') ||
+        key.includes('request.correlationId') ||
+        // Temp cache entries from failed redirects
+        (key.startsWith('msal.') && key.includes('.temp.'))
+      ) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
     if (keysToRemove.length > 0) {
-      console.debug('Cleared stale MSAL state:', keysToRemove);
+      console.debug('[Auth] Cleared stale MSAL state:', keysToRemove);
     }
   } catch {
     // localStorage may be unavailable
@@ -292,7 +305,7 @@ function saveAccountHint(account: AccountInfo): void {
 }
 
 /** Returns true if we previously had a signed-in user. */
-function hasAccountHint(): boolean {
+export function hasAccountHint(): boolean {
   try {
     return localStorage.getItem(ACCOUNT_HINT_KEY) !== null;
   } catch {

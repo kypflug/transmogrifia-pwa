@@ -1,4 +1,4 @@
-import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume } from './services/auth';
+import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint } from './services/auth';
 import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
 import { initBroadcast, postBroadcast } from './services/broadcast';
 import { initPreferences } from './services/preferences';
@@ -111,14 +111,19 @@ async function boot(app: HTMLElement): Promise<void> {
 
   if (redirectResponse?.account || isSignedIn()) {
     enterApp(app);
-  } else if (cacheRestored) {
-    // IndexedDB had auth data but MSAL didn't find valid accounts — try
-    // silent recovery (refresh token or SSO session) before giving up.
+  } else if (cacheRestored || hasAccountHint()) {
+    // Either IDB had auth data (iOS cache wipe) or localStorage still has an
+    // account hint from a previous session but MSAL can't find valid accounts
+    // (stale redirect state may have cleared them). Try silent recovery before
+    // falling back to the sign-in screen.
+    console.debug('[Boot] isSignedIn()=false but account evidence exists (cacheRestored=%s, accountHint=%s) — attempting recovery',
+      cacheRestored, hasAccountHint());
     const recovered = await tryRecoverAuth();
     if (recovered && isSignedIn()) {
-      console.info('[Boot] iOS recovery: auth restored without user interaction');
+      console.info('[Boot] Auth recovered without user interaction');
       enterApp(app);
     } else {
+      console.debug('[Boot] Recovery failed — showing sign-in');
       renderSignIn(app, () => enterApp(app));
     }
   } else {

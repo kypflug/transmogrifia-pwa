@@ -4,7 +4,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [1.5.0] — 2026-02-16
+## [1.5.1] — 2026-02-16\n\n### Fixed\n\n- **PWA signed out on every close/reopen (Windows)** — The `try-catch` added around `handleRedirectPromise()` in Fix 1/2 silently swallowed errors from stale MSAL interaction state, causing `isSignedIn()` to return false and showing the sign-in screen instead of recovering. Three changes: (1) `cleanUpStaleState()` now removes ALL MSAL temp/interaction keys (not just `interaction.status` and `request.params`), preventing recurring stale state cycles; (2) MSAL instance is always re-created after a `handleRedirectPromise` failure (not only when an account hint exists); (3) `boot()` now attempts silent auth recovery whenever an account hint exists in localStorage, not only after an IndexedDB cache restore, so Windows PWA reopens recover gracefully from transient MSAL errors.\n\n---\n\n## [1.5.0] — 2026-02-16
 
 ### Fixed
 
