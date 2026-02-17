@@ -35,6 +35,9 @@ export function renderArticleItem(
   const icon = recipe?.icon ?? '📄';
   const recipeName = recipe?.name ?? meta.recipeName ?? 'Article';
   const star = meta.isFavorite ? '<span class="fav-star active">★</span>' : '<span class="fav-star">★</span>';
+  const blockedBadge = meta.rssFallbackReason === 'source-fetch-blocked-401-403'
+    ? '<span class="blocked-badge" title="Source blocked server fetch">⚠</span>'
+    : '';
   const cloudBadge = isCached ? '' : '<span class="cloud-badge" title="Not downloaded">☁️</span>';
   const sharedBadge = meta.shareShortCode ? '<span class="shared-badge" title="Shared">🔗</span>' : '';
   const activeClass = isActive ? ' active' : '';
@@ -48,7 +51,7 @@ export function renderArticleItem(
       <div class="article-item-bottom">
         <span class="article-recipe">${icon} ${escapeHtml(recipeName)}</span>
         <span class="article-date">${relativeDate(meta.createdAt)}</span>
-        ${cloudBadge}${sharedBadge}
+        ${blockedBadge}${cloudBadge}${sharedBadge}
       </div>
     </div>
   `;

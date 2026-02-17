@@ -376,11 +376,19 @@
   margin-left: auto;
 }
 
+.blocked-badge {
+  font-size: 12px;
+  color: var(--edge-red);
+  margin-left: auto;
+}
+
 .shared-badge {
   font-size: 12px;
   margin-left: auto;
 }
 
+.blocked-badge + .cloud-badge,
+.blocked-badge + .shared-badge,
 .cloud-badge + .shared-badge {
   margin-left: 0;
 }

@@ -156,6 +156,27 @@
   flex-wrap: wrap;
 }
 
+.article-header-warning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6A4B00;
+  background: #FFF4CE;
+  border: 1px solid #F3D57A;
+  border-radius: var(--edge-radius);
+  padding: 4px 8px;
+  display: inline-block;
+}
+
+.article-header-warning a {
+  color: var(--edge-blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.article-header-warning a:hover {
+  text-decoration: underline;
+}
+
 .article-header-sep {
   color: var(--edge-text-tertiary);
 }

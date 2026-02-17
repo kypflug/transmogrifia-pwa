@@ -22,6 +22,9 @@ export function renderArticleHeader(
   const shareIcon = meta.sharedUrl ? '🔗' : '📤';
   const shareClass = meta.sharedUrl ? ' active' : '';
   const shareTitle = meta.sharedUrl ? 'Manage share link' : 'Share article';
+  const blockedWarning = meta.rssFallbackReason === 'source-fetch-blocked-401-403'
+    ? `<div class="article-header-warning">⚠ Source blocked server fetch (401/403). <a href="${escapeHtml(meta.originalUrl)}" target="_blank" rel="noopener noreferrer">Open original URL</a></div>`
+    : '';
 
   container.innerHTML = `
     <div class="article-header">
@@ -35,6 +38,7 @@ export function renderArticleHeader(
           <span class="article-header-sep">·</span>
           <span class="article-header-date">${date}</span>
         </div>
+        ${blockedWarning}
       </div>
       <div class="article-header-actions">
         <button class="action-btn fav-btn${favClass}" id="favBtn" title="Toggle favorite">
