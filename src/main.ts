@@ -1,5 +1,5 @@
-import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint } from './services/auth';
-import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
+import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint, signInWithHint } from './services/auth';
+import { restoreMsalCacheIfNeeded, setupBackgroundBackup } from './services/msal-cache-backup';
 import { initBroadcast, postBroadcast } from './services/broadcast';
 import { initPreferences } from './services/preferences';
 import { renderSignIn } from './screens/sign-in';
@@ -110,6 +110,7 @@ async function boot(app: HTMLElement): Promise<void> {
   }
 
   if (redirectResponse?.account || isSignedIn()) {
+    clearAutoRedirectMark();
     enterApp(app);
   } else if (cacheRestored || hasAccountHint()) {
     // Either IDB had auth data (iOS cache wipe) or localStorage still has an
@@ -121,12 +122,81 @@ async function boot(app: HTMLElement): Promise<void> {
     const recovered = await tryRecoverAuth();
     if (recovered && isSignedIn()) {
       console.info('[Boot] Auth recovered without user interaction');
+      clearAutoRedirectMark();
       enterApp(app);
+    } else if (canAutoRedirect()) {
+      // Silent recovery failed but we have evidence of a previous session.
+      // Auto-redirect to Microsoft login with the saved loginHint so the
+      // user doesn't have to tap "Sign In" manually. The Microsoft session
+      // cookie is usually still valid so this completes quickly.
+      console.info('[Boot] Silent recovery failed — auto-redirecting to Microsoft login');
+      markAutoRedirected();
+      await attemptAutoRedirect(app);
     } else {
-      console.debug('[Boot] Recovery failed — showing sign-in');
+      console.debug('[Boot] Recovery failed, auto-redirect already attempted — showing sign-in');
       renderSignIn(app, () => enterApp(app));
     }
   } else {
+    renderSignIn(app, () => enterApp(app));
+  }
+}
+
+// ─── Auto-redirect helpers (iOS session recovery) ───
+
+const AUTO_REDIRECT_KEY = 'transmogrifia_auto_redirect';
+
+/** True if we haven't already attempted an auto-redirect this session. */
+function canAutoRedirect(): boolean {
+  try { return !sessionStorage.getItem(AUTO_REDIRECT_KEY); }
+  catch { return false; }
+}
+
+function markAutoRedirected(): void {
+  try { sessionStorage.setItem(AUTO_REDIRECT_KEY, '1'); }
+  catch { /* sessionStorage may be unavailable */ }
+}
+
+function clearAutoRedirectMark(): void {
+  try { sessionStorage.removeItem(AUTO_REDIRECT_KEY); }
+  catch { /* */ }
+}
+
+/**
+ * Auto-redirect to Microsoft login with the saved loginHint.
+ * Keeps the boot loading spinner visible while the redirect opens.
+ *
+ * On iOS standalone PWA, loginRedirect opens an in-app Safari sheet rather
+ * than navigating the page. A visibilitychange handler re-checks auth when
+ * the sheet closes. On regular browsers the page navigates away and boot()
+ * runs again on return.
+ *
+ * Falls back to the manual sign-in screen if the redirect fails.
+ */
+async function attemptAutoRedirect(app: HTMLElement): Promise<void> {
+  // Set up iOS Safari sheet return handler (PWA page stays loaded)
+  const handler = async () => {
+    if (document.visibilityState !== 'visible') return;
+    document.removeEventListener('visibilitychange', handler);
+
+    try {
+      const response = await initAuth(true);
+      if (response?.account || isSignedIn()) {
+        clearAutoRedirectMark();
+        enterApp(app);
+        return;
+      }
+    } catch { /* fall through */ }
+
+    // Auto-redirect didn't result in sign-in — show manual sign-in
+    renderSignIn(app, () => enterApp(app));
+  };
+  document.addEventListener('visibilitychange', handler);
+
+  try {
+    // loginRedirect navigates away (or opens iOS Safari sheet)
+    await signInWithHint();
+  } catch {
+    document.removeEventListener('visibilitychange', handler);
     renderSignIn(app, () => enterApp(app));
   }
 }
@@ -144,6 +214,7 @@ function enterApp(app: HTMLElement): void {
   window.addEventListener('hashchange', () => route(app));
   handleShareTarget();
   setupResumeHandler();
+  setupBackgroundBackup();
 }
 
 function route(app: HTMLElement): void {

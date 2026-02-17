@@ -166,3 +166,35 @@ export async function clearMsalCacheBackup(): Promise<void> {
     // Best-effort cleanup
   }
 }
+
+/**
+ * Register listeners to backup MSAL cache before iOS kills the process.
+ *
+ * iOS aggressively terminates WKWebView processes when the PWA is
+ * backgrounded. `pagehide` is the last reliable event before termination.
+ * `visibilitychange: hidden` fires earlier (app switch) and gives more
+ * time for the IndexedDB write to complete.
+ *
+ * Call once after entering the app (sign-in confirmed).
+ */
+export function setupBackgroundBackup(): void {
+  let lastBackup = 0;
+  const MIN_INTERVAL_MS = 60_000; // At most once per minute on visibility
+
+  const debouncedBackup = () => {
+    const now = Date.now();
+    if (now - lastBackup < MIN_INTERVAL_MS) return;
+    lastBackup = now;
+    backupMsalCache().catch(() => {});
+  };
+
+  // pagehide — last chance before iOS process kill; always run (no debounce)
+  window.addEventListener('pagehide', () => {
+    backupMsalCache().catch(() => {});
+  });
+
+  // visibilitychange: hidden — fires on app switch, tab switch, etc.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') debouncedBackup();
+  });
+}

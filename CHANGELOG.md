@@ -4,6 +4,20 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.4] — 2026-02-17
+
+### Fixed
+
+- **iOS PWA: blank screen on cold restart** — When iOS kills the WKWebView process after backgrounding, the app now shows a loading spinner immediately instead of a blank white/grey screen for 10+ seconds while auth resolves.
+
+- **iOS PWA: faster auth recovery** — Skipped `ssoSilent` recovery on iOS standalone PWAs where it always times out (~6 seconds wasted) due to third-party iframe restrictions. Recovery now falls directly to the redirect-based path.
+
+- **iOS PWA: seamless re-authentication** — When silent token recovery fails but the user was previously signed in, the app now auto-redirects to Microsoft login with the saved `loginHint` instead of requiring the user to manually tap "Sign In". A `sessionStorage` guard prevents redirect loops.
+
+- **iOS PWA: proactive MSAL cache backup** — MSAL cache is now backed up to IndexedDB on `pagehide` and `visibilitychange:hidden` events, giving the backup a chance to persist before iOS kills the process. Previously, backups only ran after explicit auth operations.
+
+---
+
 ## [1.5.3] — 2026-02-17
 
 ### Changed

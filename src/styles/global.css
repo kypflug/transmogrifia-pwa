@@ -107,6 +107,15 @@ body {
   display: none !important;
 }
 
+/* ===== Boot Loading ===== */
+.boot-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+  background: var(--edge-surface);
+}
+
 /* ===== Spinner ===== */
 .spinner {
   width: 32px;

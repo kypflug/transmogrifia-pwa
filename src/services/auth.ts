@@ -27,6 +27,14 @@ const LOGIN_SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access'
 /** localStorage key for our own account marker (iOS recovery). */
 const ACCOUNT_HINT_KEY = 'transmogrifia_account_hint';
 
+/** Detect iOS standalone PWA (home-screen installed). */
+function isIosStandalone(): boolean {
+  const isStandalone =
+    ('standalone' in navigator && (navigator as unknown as Record<string, unknown>).standalone === true) ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  return isStandalone && /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
 let msalInstance: PublicClientApplication | null = null;
 let redirectHandled = false;
 
@@ -370,23 +378,29 @@ export async function tryRecoverAuth(): Promise<boolean> {
     }
   }
 
-  // Step 2: try ssoSilent with login hint from account hint
-  const hint = getAccountHint();
-  if (hint?.username) {
-    try {
-      const result = await msalInstance.ssoSilent({
-        scopes: LOGIN_SCOPES,
-        loginHint: hint.username,
-      });
-      if (result.account) {
-        saveAccountHint(result.account);
-        backupMsalCache().catch(() => {});
-        console.info('[Auth] iOS recovery: ssoSilent succeeded');
-        return true;
+  // Step 2: try ssoSilent with login hint from account hint.
+  // Skip on iOS standalone PWAs — hidden iframes are blocked by third-party
+  // cookie restrictions, so ssoSilent always times out (~6s wasted).
+  if (!isIosStandalone()) {
+    const hint = getAccountHint();
+    if (hint?.username) {
+      try {
+        const result = await msalInstance.ssoSilent({
+          scopes: LOGIN_SCOPES,
+          loginHint: hint.username,
+        });
+        if (result.account) {
+          saveAccountHint(result.account);
+          backupMsalCache().catch(() => {});
+          console.info('[Auth] iOS recovery: ssoSilent succeeded');
+          return true;
+        }
+      } catch (err) {
+        console.debug('[Auth] iOS recovery: ssoSilent failed:', (err as Error).message);
       }
-    } catch (err) {
-      console.debug('[Auth] iOS recovery: ssoSilent failed:', (err as Error).message);
     }
+  } else {
+    console.debug('[Auth] iOS standalone — skipping ssoSilent (iframe blocked)');
   }
 
   return false;
@@ -434,4 +448,21 @@ export async function refreshTokenOnResume(): Promise<void> {
     // Not critical — the next getAccessToken() call will handle refresh
     console.debug('[Auth] Resume: token refresh failed — will recover on next Graph call');
   }
+}
+
+/**
+ * Perform a loginRedirect pre-filled with the saved account hint.
+ * Used for seamless re-authentication when silent recovery fails but the
+ * user's Microsoft session is likely still active.
+ *
+ * Omits `prompt: 'select_account'` so Microsoft can auto-sign-in with
+ * the hinted account if only one session is active.
+ */
+export async function signInWithHint(): Promise<void> {
+  const msal = getMsal();
+  const hint = getAccountHint();
+  await msal.loginRedirect({
+    scopes: LOGIN_SCOPES,
+    ...(hint?.username ? { loginHint: hint.username } : {}),
+  });
 }
