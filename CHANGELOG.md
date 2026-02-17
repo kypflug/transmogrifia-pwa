@@ -4,6 +4,64 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.0] — 2026-02-16
+
+### Fixed
+
+- **Coordinator cleanup leaked on route switch** — `teardownScreenListeners` only ran when `renderLibrary` re-entered, not when navigating to settings. Exported the function and call it from `route()` before rendering any screen, ensuring coordinator subscriptions and write queue are properly torn down on every route change.
+
+- **Cross-tab refresh ignored empty cache** — `refreshFromCache()` in sync-coordinator skipped the emit when the cache was empty, leaving stale article lists visible in other tabs after destructive operations. Now always emits `articles-updated`, even with an empty list.
+
+- **Sign-out did not broadcast auth-changed** — The sign-out handler cleared cache and reloaded without broadcasting `auth-changed signedIn: false`. Other tabs had no notification of the sign-out until their next Graph call failed. Now broadcasts before reload.
+
+- **Share/unshare 412 conflicts gave generic error** — When `uploadMeta` hit an ETag 412 during share/unshare (no `mergeFn` path), the user saw a generic failure toast. Now shows an actionable message ("Sync and retry") and logs the 412 with `[Sync]` prefix for observability.
+
+- **Auth cascade never redirected for re-auth** (Fix 1) — After a `BrowserAuthError` retry with `forceRefresh` failed, the catch block fell through to an `InteractionRequiredAuthError` type check that never matched, so `acquireTokenRedirect` was never called. Users were stuck signed out with no recovery path. Now explicitly calls `acquireTokenRedirect` after the retry fails.
+
+- **MSAL backup restored stale interaction state** (Fix 2) — `msal-cache-backup.ts` was snapshotting `interaction.status` and `request.params` keys. Restoring these after an iOS process kill caused `interaction_in_progress` errors, blocking sign-in. Both backup and restore now skip these transient keys.
+
+- **Delta token lost on iOS** (Fix 3) — Delta token was stored in localStorage, which iOS evicts aggressively. Moved to IndexedDB `settings` store with a one-time migration from localStorage (avoids forcing a full sync on first launch after deployment).
+
+- **`_index.json` treated as an article** (Fix 4) — The `.json` filter in `syncArticles`, `bootstrapDeltaToken`, and `listArticles` didn't exclude `_index.json`. Added `if (name.startsWith('_')) continue;` in all three loops to eliminate the phantom `_index` article.
+
+- **`bootstrapDeltaToken` saved delta token prematurely** (Fix 5) — If metadata downloads partially failed, the token was already saved, making those articles permanently invisible to future syncs. Moved delta token save to after all downloads complete; only saves if zero failures.
+
+- **`reconcileCache` destructively replaced cache on index sync** (Fix 6) — On index-based sync, cache was wiped and replaced with (potentially stale) index data. Now shows index as a fast preview via `cacheAllMeta`, then awaits `bootstrapDeltaToken` to discover additions/deletions, and reconciles with the merged set.
+
+- **No concurrent sync guard** (Fix 7) — `loadArticles` could run concurrently, racing on delta token saves and cache mutations. Added a module-level `isSyncing` lock.
+
+- **`openArticle` race condition** (Fix 8) — Rapidly clicking two articles could show stale content from the first download. Added an epoch counter with three checkpoint checks in `openArticle`.
+
+- **Duplicate global event handlers on screen re-entry** (Fix 9) — `renderLibrary` stacked `keydown`, `click`, `online`/`offline` listeners on `document`/`window` every time it was called. Added `trackListener()` / `teardownScreenListeners()` lifecycle system.
+
+- **Resume handler too aggressive** (Fix 12) — 2-minute throttle skipped critical token refreshes on iOS. Now tries a non-forced `acquireTokenSilent` first (cheap), only escalates to `forceRefresh` on failure, with a 30-second hard floor.
+
+- **Full-resync fallback for stale tokens** (Fix 15) — If `lastSyncTime` is >1 hour old or absent, the delta token is cleared to force a full sync, catching stale tokens that silently serve outdated data.
+
+- **Service worker could interrupt auth redirects** (Fix 19) — `registerType: 'autoUpdate'` with `skipWaiting` could activate a new service worker mid-auth redirect. Changed to `registerType: 'prompt'` with deferred activation until `handleRedirectPromise()` completes.
+
+### Added
+
+- **BroadcastChannel cross-tab sync** (Fix 10) — Uses `BroadcastChannel` (with `storage` event fallback for Safari <15.4) to propagate `sync-complete`, `article-mutated`, `settings-updated`, and `auth-changed` events between tabs. New `src/services/broadcast.ts` module.
+
+- **ETag-guarded metadata writes** (Fix 11) — `uploadMeta` now sends `If-Match` with the article's ETag when available. On 412 conflict, re-downloads the server version, merges the change via a caller-supplied `mergeFn`, and retries.
+
+- **Last synced timestamp** (Fix 13) — Stores `lastSyncTime` in IndexedDB after every successful sync. Displayed in sidebar footer (e.g., "synced 3m ago").
+
+- **iOS divergence UX notice** (Fix 16) — Detects likely cache-vs-cloud mismatch (no delta token + stale `lastSyncTime`). Shows a concise notice bar with a one-tap "Refresh from Cloud" button instead of silently serving stale data.
+
+- **Settings sync version counter** (Fix 17) — Added a monotonic `syncVersion` counter alongside `updatedAt` in the settings envelope. Used as the primary conflict resolution signal (falls back to timestamp comparison when version is absent), reducing clock-skew risk.
+
+- **Production observability breadcrumbs** (Fix 18) — Structured `console.debug` breadcrumbs: `[Auth]` for token lifecycle, `[Sync]` for delta token source/bootstrap results, `[Cache]` for IDB transaction outcomes. All logs redact tokens and identifiers.
+
+### Changed
+
+- **Preferences moved to IndexedDB** (Fix 14) — Sort, filter, and sidebar-width preferences now use IndexedDB as primary storage with an in-memory cache for synchronous reads. One-time migration from localStorage. Theme stays in localStorage for FOUC prevention. `initPreferences()` is async and called during app boot.
+
+- **SyncCoordinator architecture** (Fix 20) — Extracted all sync orchestration, write queueing, divergence detection, and cross-tab broadcast logic from `library.ts` into a dedicated `src/services/sync-coordinator.ts` module. The coordinator owns the sync lock, article state, stale-sync fallback, and a write queue with optimistic updates + exponential-backoff retry (3 attempts, 1→2→4s). On permanent write failure, mutations are rolled back locally and a `mutation-reverted` event notifies the UI. `library.ts` subscribes to coordinator events for rendering, reducing its sync responsibilities to pure UI mapping.
+
+---
+
 ## [1.4.2] — 2026-02-14
 
 ### Fixed

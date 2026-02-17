@@ -1,15 +1,41 @@
 import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume } from './services/auth';
 import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
+import { initBroadcast, postBroadcast } from './services/broadcast';
+import { initPreferences } from './services/preferences';
 import { renderSignIn } from './screens/sign-in';
-import { renderLibrary, showAddUrlModal } from './screens/library';
+import { renderLibrary, showAddUrlModal, teardownScreenListeners } from './screens/library';
 import { renderSettings } from './screens/settings';
 import { renderSharedViewer } from './screens/shared-viewer';
 import { checkQueuePrereqs } from './services/cloud-queue';
 import { showToast } from './components/toast';
 import { applyTheme } from './theme';
 import { escapeHtml } from './utils/storage';
+import { registerSW } from 'virtual:pwa-register';
 
 const app = document.getElementById('app')!;
+
+/**
+ * Service worker update coordination (Fix 19).
+ * With registerType: 'prompt', the new SW waits until we explicitly call
+ * updateSW(). We defer activation until after handleRedirectPromise()
+ * (initAuth) completes to avoid interrupting auth redirects.
+ */
+let pendingSwUpdate: (() => Promise<void>) | null = null;
+const updateSW = registerSW({
+  onNeedRefresh() {
+    if (authBootComplete) {
+      // Auth already done — safe to activate immediately
+      updateSW().catch(() => {});
+    } else {
+      // Auth still in progress — defer until boot finishes
+      pendingSwUpdate = updateSW;
+    }
+  },
+  onOfflineReady() {
+    console.debug('[SW] App ready for offline use');
+  },
+});
+let authBootComplete = false;
 
 boot(app).catch(err => {
     console.error('Boot failed:', err);
@@ -76,6 +102,13 @@ async function boot(app: HTMLElement): Promise<void> {
   // now signed in and we should go straight to the library.
   const redirectResponse = await initAuth();
 
+  // Fix 19: Auth redirect handling is done — safe to activate pending SW update
+  authBootComplete = true;
+  if (pendingSwUpdate) {
+    pendingSwUpdate().catch(() => {});
+    pendingSwUpdate = null;
+  }
+
   if (redirectResponse?.account || isSignedIn()) {
     enterApp(app);
   } else if (cacheRestored) {
@@ -95,13 +128,22 @@ async function boot(app: HTMLElement): Promise<void> {
 
 /** Transition to the main app: set up routing, share target, and resume handler. */
 function enterApp(app: HTMLElement): void {
-  route(app);
+  initBroadcast();
+  postBroadcast({ type: 'auth-changed', signedIn: true });
+  // Load preferences from IndexedDB before rendering (Fix 14)
+  initPreferences().then(() => {
+    route(app);
+  }).catch(() => {
+    route(app); // fallback to localStorage-based prefs
+  });
   window.addEventListener('hashchange', () => route(app));
   handleShareTarget();
   setupResumeHandler();
 }
 
 function route(app: HTMLElement): void {
+  // Tear down library listeners/coordinator before switching screens (Fix 20)
+  teardownScreenListeners();
   const hash = location.hash.slice(1);
   if (hash === 'settings') {
     renderSettings(app);
@@ -116,22 +158,27 @@ function route(app: HTMLElement): void {
  * On iOS, WKWebView processes are suspended aggressively. If the access token
  * expired while backgrounded, the first Graph call after resume would fail and
  * trigger a redirect to Microsoft login — which looks like being signed out.
- * By refreshing early (on visibilitychange → visible), we ensure the token is
- * fresh before any UI-initiated Graph call.
+ *
+ * Strategy (Fix 12):
+ * 1. Try non-forced acquireTokenSilent (cheap — uses cached token if still valid)
+ * 2. Only escalate to forceRefresh: true if the cheap attempt fails
+ * 3. Hard floor of 30 seconds between any refresh attempts to avoid hammering
  */
 function setupResumeHandler(): void {
   let lastRefresh = Date.now();
+  const REFRESH_FLOOR_MS = 30_000; // 30 seconds
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
 
-    // Throttle: don't refresh more than once per 2 minutes
     const now = Date.now();
-    if (now - lastRefresh < 120_000) return;
+    if (now - lastRefresh < REFRESH_FLOOR_MS) return;
     lastRefresh = now;
 
+    // First try a cheap silent acquire (uses cached token if still valid)
     refreshTokenOnResume().catch(() => {
       // Non-critical — token refresh will happen on next Graph call
+      console.debug('[Auth] Resume token refresh failed — next Graph call will handle it');
     });
   });
 }

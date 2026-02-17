@@ -1,7 +1,8 @@
 import { getAccessToken } from './auth';
 import type { OneDriveArticleMeta, UserProfile } from '../types';
 import type { SyncEncryptedEnvelope, LegacyEncryptedEnvelope } from './crypto';
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
+import { safeGetItem, safeRemoveItem } from '../utils/storage';
+import { getSettingsValue, setSettingsValue, removeSettingsValue } from './cache';
 import {
   GRAPH_BASE,
   APP_FOLDER,
@@ -13,13 +14,57 @@ import {
   graphItemUrl,
 } from '@kypflug/transmogrifier-core';
 const DELTA_TOKEN_KEY = 'transmogrifia_delta_token';
+/** Legacy localStorage key — used for one-time migration to IndexedDB */
+const DELTA_TOKEN_LS_KEY = 'transmogrifia_delta_token';
 const INDEX_FILE = `${APP_FOLDER}/_index.json`;
 const METADATA_CONCURRENCY = 6;
+
+// ─── Delta token persistence (IndexedDB with localStorage migration) ───
+
+/**
+ * Read the delta token, migrating from localStorage to IndexedDB on first run.
+ * Returns the token string or null if none exists.
+ */
+async function getDeltaToken(): Promise<string | null> {
+  // Check IndexedDB first (primary store)
+  const idbToken = await getSettingsValue<string>(DELTA_TOKEN_KEY);
+  if (idbToken) return idbToken;
+
+  // One-time migration: read from legacy localStorage
+  const lsToken = safeGetItem(DELTA_TOKEN_LS_KEY);
+  if (lsToken) {
+    console.debug('[Sync] Migrating delta token from localStorage to IndexedDB');
+    await setSettingsValue(DELTA_TOKEN_KEY, lsToken);
+    safeRemoveItem(DELTA_TOKEN_LS_KEY);
+    return lsToken;
+  }
+
+  return null;
+}
+
+/** Save the delta token to IndexedDB. */
+async function saveDeltaToken(token: string): Promise<void> {
+  await setSettingsValue(DELTA_TOKEN_KEY, token);
+}
+
+/** Remove the delta token from both IndexedDB and legacy localStorage. */
+async function removeDeltaToken(): Promise<void> {
+  await removeSettingsValue(DELTA_TOKEN_KEY);
+  safeRemoveItem(DELTA_TOKEN_LS_KEY); // clean up legacy if still present
+}
+
+/** Check whether a delta token exists (Fix 16: used by divergence detection). */
+export async function hasDeltaToken(): Promise<boolean> {
+  const token = await getSettingsValue<string>(DELTA_TOKEN_KEY);
+  return !!token;
+}
 
 /** Describes a metadata file to download (collected before batch download) */
 interface MetaDownloadItem {
   id: string;
   directUrl?: string;
+  /** Drive item eTag captured from delta/list responses (Fix 11) */
+  eTag?: string;
 }
 
 /** Shape of the _index.json file on OneDrive */
@@ -53,7 +98,7 @@ export interface DeltaSyncResult {
  */
 export async function syncArticles(): Promise<DeltaSyncResult> {
   const headers = await authHeaders();
-  const savedToken = safeGetItem(DELTA_TOKEN_KEY);
+  const savedToken = await getDeltaToken();
   const isFullSync = !savedToken;
 
   // For full syncs (no delta token), try the fast index path first
@@ -81,7 +126,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
       if (!res.ok) {
         if (res.status === 404 || res.status === 410) {
           // Folder doesn't exist yet or delta token expired — fall back to full list
-          safeRemoveItem(DELTA_TOKEN_KEY);
+          await removeDeltaToken();
           const allMeta = await listArticles();
           return { upserted: allMeta, deleted: [], fullSync: true, usedIndex: false };
         }
@@ -96,6 +141,8 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
       for (const item of items) {
         const name = item.name as string | undefined;
         if (!name) continue;
+        // Skip internal files like _index.json (Fix 4: S2)
+        if (name.startsWith('_')) continue;
 
         // Check if item was deleted (Graph uses both `deleted` facet and `@removed` annotation)
         if (item.deleted || item['@removed']) {
@@ -111,7 +158,8 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
         if (!name.endsWith('.json')) continue;
         const id = name.replace('.json', '');
         const directUrl = item['@microsoft.graph.downloadUrl'] as string | undefined;
-        toDownload.push({ id, directUrl });
+        const itemETag = item.eTag as string | undefined;
+        toDownload.push({ id, directUrl, eTag: itemETag });
       }
 
       // Follow nextLink for more pages, or capture the delta link when done
@@ -128,7 +176,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   } catch (err) {
     // If the saved token caused an error, clear it and throw
     if (savedToken) {
-      safeRemoveItem(DELTA_TOKEN_KEY);
+      await removeDeltaToken();
     }
     throw err;
   }
@@ -144,7 +192,7 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   // Only persist the delta token if ALL items were successfully downloaded.
   if (finalDeltaLink) {
     if (!hasDownloadFailures) {
-      safeSetItem(DELTA_TOKEN_KEY, finalDeltaLink);
+      await saveDeltaToken(finalDeltaLink);
     } else {
       console.warn('Delta token not saved — some metadata download(s) failed; will retry next sync');
     }
@@ -157,8 +205,8 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
 }
 
 /** Clear the saved delta token (used when signing out / clearing cache) */
-export function clearDeltaToken(): void {
-  safeRemoveItem(DELTA_TOKEN_KEY);
+export async function clearDeltaToken(): Promise<void> {
+  await removeDeltaToken();
 }
 
 /**
@@ -197,6 +245,7 @@ export async function bootstrapDeltaToken(
   let url: string | null = `${GRAPH_BASE}/me/drive/special/approot:/${APP_FOLDER}:/delta`;
   const toDownload: MetaDownloadItem[] = [];
   const deletedIds: string[] = [];
+  let finalDeltaLink: string | null = null;
 
   try {
     while (url) {
@@ -209,6 +258,8 @@ export async function bootstrapDeltaToken(
       for (const item of items) {
         const name = item.name as string | undefined;
         if (!name) continue;
+        // Skip internal files like _index.json (Fix 4: S2)
+        if (name.startsWith('_')) continue;
 
         if (item.deleted || item['@removed']) {
           if (name.endsWith('.json')) {
@@ -231,7 +282,8 @@ export async function bootstrapDeltaToken(
       const nextLink = data['@odata.nextLink'] as string | undefined;
 
       if (deltaLink) {
-        safeSetItem(DELTA_TOKEN_KEY, deltaLink);
+        // Delta token saved AFTER downloads complete (see below)
+        finalDeltaLink = deltaLink;
         url = null;
       } else {
         url = nextLink || null;
@@ -240,9 +292,22 @@ export async function bootstrapDeltaToken(
 
     // Download metadata for articles not in the index (parallel batches)
     let newMetas: OneDriveArticleMeta[] = [];
+    let hasDownloadFailures = false;
     if (toDownload.length > 0) {
-      const { metas } = await downloadMetaBatch(toDownload, headers);
+      const { metas, failureCount } = await downloadMetaBatch(toDownload, headers);
       newMetas = metas;
+      hasDownloadFailures = failureCount > 0;
+    }
+
+    // Only persist the delta token AFTER all downloads complete successfully.
+    // Previously this was saved as soon as the delta link arrived, before
+    // metadata downloads finished — meaning partially-failed downloads were
+    // permanently invisible to future incremental syncs (Fix 5).
+    if (finalDeltaLink && !hasDownloadFailures) {
+      await saveDeltaToken(finalDeltaLink);
+      console.debug('[Sync] Bootstrap delta token saved');
+    } else if (finalDeltaLink) {
+      console.warn('[Sync] Bootstrap delta token NOT saved — some metadata downloads failed');
     }
 
     return { newMetas, deletedIds: [...new Set(deletedIds)] };
@@ -281,6 +346,8 @@ export async function listArticles(): Promise<OneDriveArticleMeta[]> {
     for (const item of items) {
       const name: string = item.name;
       if (!name.endsWith('.json')) continue;
+      // Skip internal files like _index.json (Fix 4: S2)
+      if (name.startsWith('_')) continue;
       const id = name.replace('.json', '');
       toDownload.push({ id });
     }
@@ -326,9 +393,16 @@ async function downloadMetaBatch(
         return downloadMeta(item.id, headers);
       }),
     );
-    for (const result of results) {
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
       if (result.status === 'fulfilled') {
-        metas.push(result.value);
+        const meta = result.value;
+        // Attach drive item eTag to the meta object for conditional writes (Fix 11)
+        const sourceItem = batch[j];
+        if (sourceItem.eTag) {
+          (meta as unknown as Record<string, unknown>).eTag = sourceItem.eTag;
+        }
+        metas.push(meta);
       } else {
         console.warn('Metadata download failed:', result.reason);
         failureCount++;
@@ -396,18 +470,71 @@ export async function downloadArticleHtml(id: string): Promise<string> {
 }
 
 /**
- * Upload updated metadata (used for favorite toggle).
+ * Upload updated metadata (used for favorite toggle, share).
+ *
+ * Uses If-Match with the article's ETag when available to prevent
+ * last-write-wins data loss on concurrent edits from different devices.
+ * On 412 Precondition Failed, re-downloads the server version, merges
+ * the change, and retries once. (Fix 11)
  */
-export async function uploadMeta(meta: OneDriveArticleMeta): Promise<void> {
+export async function uploadMeta(
+  meta: OneDriveArticleMeta,
+  mergeFn?: (local: OneDriveArticleMeta, remote: OneDriveArticleMeta) => OneDriveArticleMeta,
+): Promise<void> {
   const headers = await authHeaders();
+  const uploadHeaders: Record<string, string> = {
+    ...headers,
+    'Content-Type': 'application/json',
+  };
+
+  // If the article has an eTag from a previous download, use conditional write
+  // Note: eTag is populated at runtime from Graph API responses but is not part
+  // of the shared OneDriveArticleMeta type definition.
+  const eTag = (meta as unknown as Record<string, unknown>).eTag as string | undefined;
+  if (eTag) {
+    uploadHeaders['If-Match'] = eTag;
+  }
+
   const res = await fetch(
     graphContentUrl(articleMetaPath(meta.id)),
     {
       method: 'PUT',
-      headers: { ...headers, 'Content-Type': 'application/json' },
+      headers: uploadHeaders,
       body: JSON.stringify(meta, null, 2),
     },
   );
+
+  if (res.status === 412 && mergeFn) {
+    // ETag conflict — re-download, merge, and retry without If-Match
+    console.debug('[Sync] ETag conflict on uploadMeta for %s — merging and retrying', meta.id.substring(0, 8) + '…');
+    try {
+      const remoteMeta = await downloadMeta(meta.id, headers);
+      const merged = mergeFn(meta, remoteMeta);
+      merged.updatedAt = Date.now();
+      const retryRes = await fetch(
+        graphContentUrl(articleMetaPath(meta.id)),
+        {
+          method: 'PUT',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify(merged, null, 2),
+        },
+      );
+      if (!retryRes.ok) throw new Error(`Upload meta merge-retry failed: ${retryRes.status}`);
+      // Update the in-memory meta with merged values
+      Object.assign(meta, merged);
+      return;
+    } catch (mergeErr) {
+      console.warn('[Sync] ETag merge-retry failed:', mergeErr);
+      throw mergeErr;
+    }
+  }
+
+  if (res.status === 412 && !mergeFn) {
+    // No mergeFn provided — log for observability so we can revisit if frequent
+    console.warn('[Sync] ETag 412 conflict on uploadMeta for %s — no mergeFn, failing', meta.id.substring(0, 8) + '…');
+    throw new Error('Upload meta conflict: 412');
+  }
+
   if (!res.ok) throw new Error(`Upload meta failed: ${res.status}`);
 }
 
@@ -466,6 +593,8 @@ export async function getUserProfile(): Promise<UserProfile> {
 export interface CloudSettingsFile {
   envelope: SyncEncryptedEnvelope | LegacyEncryptedEnvelope;
   updatedAt: number;
+  /** Monotonic version counter for clock-skew-safe conflict resolution (Fix 17) */
+  syncVersion?: number;
 }
 
 /**
@@ -487,9 +616,10 @@ export async function downloadSettings(): Promise<CloudSettingsFile | null> {
  * Upload encrypted settings to OneDrive AppFolder.
  * Wraps the envelope in `{ envelope, updatedAt }` to match the extension format.
  */
-export async function uploadSettings(envelope: SyncEncryptedEnvelope, updatedAt: number): Promise<void> {
+export async function uploadSettings(envelope: SyncEncryptedEnvelope, updatedAt: number, syncVersion?: number): Promise<void> {
   const headers = await authHeaders();
   const payload: CloudSettingsFile = { envelope, updatedAt };
+  if (syncVersion != null) payload.syncVersion = syncVersion;
   const res = await fetch(
     graphContentUrl(SETTINGS_FILE),
     {

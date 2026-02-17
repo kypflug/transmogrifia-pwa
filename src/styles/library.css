@@ -261,6 +261,40 @@
   border-color: var(--edge-blue);
 }
 
+/* ===== Divergence Notice (Fix 16) ===== */
+.divergence-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--edge-blue-muted);
+  border-bottom: 1px solid var(--edge-border-subtle);
+  flex-shrink: 0;
+}
+
+.divergence-notice-text {
+  font-size: 12px;
+  color: var(--edge-text-secondary);
+}
+
+.divergence-notice-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--edge-blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: var(--edge-radius);
+  transition: background 0.15s;
+}
+
+.divergence-notice-btn:hover {
+  background: var(--edge-blue-light);
+}
+
 /* ===== Article List ===== */
 .article-list-container {
   flex: 1;

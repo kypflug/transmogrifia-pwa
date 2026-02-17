@@ -1,22 +1,29 @@
 import type { OneDriveArticleMeta, OneDriveImageAsset, SortOrder, FilterMode } from '../types';
 import { signOut, getUserDisplayName } from '../services/auth';
-import { downloadArticleHtml, uploadMeta, deleteArticle, syncArticles, clearDeltaToken, downloadArticleAsset, rebuildIndex, bootstrapDeltaToken } from '../services/graph';
+import { downloadArticleHtml, uploadMeta, clearDeltaToken, downloadArticleAsset } from '../services/graph';
 import {
-  getCachedMeta,
   cacheHtml,
   getCachedHtml,
-  getCachedHtmlIds,
   getCacheStats,
   cacheMeta,
   clearCache,
-  deleteCachedArticle,
-  mergeDeltaIntoCache,
-  reconcileCache,
   getCachedImage,
   cacheImage,
   getCachedImageColors,
   cacheImageColor,
+  getSettingsValue,
 } from '../services/cache';
+import {
+  requestSync,
+  forceFullSync,
+  refreshFromCache,
+  mutateArticle,
+  removeArticle,
+  setArticles,
+  updateCachedIds,
+  subscribe as subscribeCoordinator,
+  destroy as destroyCoordinator,
+} from '../services/sync-coordinator';
 import {
   getSortOrder,
   setSortOrder,
@@ -34,6 +41,7 @@ import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
 import { shareArticle, unshareArticle } from '../services/blob-storage';
 import { getEffectiveSharingConfig, tryAutoImportFromCloud } from '../services/settings';
+import { onBroadcast, postBroadcast } from '../services/broadcast';
 
 /** A cloud job that is in progress (tracked client-side only). */
 interface PendingJob {
@@ -56,6 +64,29 @@ let pendingJobs: PendingJob[] = [];
 let selectedPendingId: string | null = null;
 let activeBlobUrls: string[] = [];
 
+/** Epoch counter for openArticle race protection (Fix 8: U1) */
+let openArticleEpoch = 0;
+
+// ─── Global event listener lifecycle (Fix 9: U2) ──────────────────
+type CleanupFn = () => void;
+let screenCleanups: CleanupFn[] = [];
+
+/** Register a global event listener that will be torn down on screen re-entry. */
+function trackListener<K extends keyof DocumentEventMap>(
+  target: EventTarget,
+  event: K | string,
+  handler: EventListener,
+  options?: boolean | AddEventListenerOptions,
+): void {
+  target.addEventListener(event, handler, options);
+  screenCleanups.push(() => target.removeEventListener(event, handler, options as boolean | EventListenerOptions | undefined));
+}
+
+/** Tear down all tracked global listeners from the current screen. */
+export function teardownScreenListeners(): void {
+  for (const cleanup of screenCleanups) cleanup();
+  screenCleanups = [];
+}
 function releaseActiveBlobUrls(): void {
   for (const url of activeBlobUrls) {
     URL.revokeObjectURL(url);
@@ -193,6 +224,8 @@ function findImageAsset(
 }
 
 export function renderLibrary(root: HTMLElement): void {
+  // Tear down global listeners from previous screen entry (Fix 9: U2)
+  teardownScreenListeners();
   container = root;
   sortOrder = getSortOrder();
   filterMode = getFilterMode();
@@ -241,6 +274,11 @@ export function renderLibrary(root: HTMLElement): void {
               <option value="alpha">A → Z</option>
             </select>
           </div>
+        </div>
+
+        <div class="divergence-notice hidden" id="divergenceNotice" role="alert">
+          <span class="divergence-notice-text">Your library may be out of date</span>
+          <button class="divergence-notice-btn" id="divergenceRefreshBtn">Refresh from Cloud</button>
         </div>
 
         <div class="article-list-container" id="articleList">
@@ -314,6 +352,7 @@ export function renderLibrary(root: HTMLElement): void {
 async function initLibrary(): Promise<void> {
   setupUserMenu();
   setupSyncButton();
+  setupCoordinator();
   setupSearch();
   setupFilters();
   setupResizeHandle();
@@ -323,6 +362,7 @@ async function initLibrary(): Promise<void> {
   populateRecipeFilters();
   setSelectValues();
   setupFab();
+  setupBroadcastListener();
 
   // On a new device with no settings, silently pull from OneDrive
   tryAutoImportFromCloud().then(imported => {
@@ -330,7 +370,7 @@ async function initLibrary(): Promise<void> {
   });
 
   // Load articles
-  await loadArticles();
+  await requestSync();
 }
 
 function setSelectValues(): void {
@@ -350,76 +390,17 @@ function populateRecipeFilters(): void {
   }
 }
 
-async function loadArticles(): Promise<void> {
-  // 1. Show cached articles instantly
-  const cached = await getCachedMeta();
-  cachedIds = await getCachedHtmlIds();
-  if (cached.length > 0) {
-    articles = cached;
-    renderList();
+/** Show a transient status message in the sidebar footer */
+function updateSyncFooter(message: string | null): void {
+  const statsEl = document.getElementById('sidebarFooterStats');
+  if (!statsEl) return;
+  if (message) {
+    statsEl.dataset.syncMessage = message;
+    statsEl.textContent = message;
+  } else {
+    delete statsEl.dataset.syncMessage;
+    // Restore normal stats
     updateFooter();
-  }
-
-  // 2. Sync in background via delta API (or article index)
-  try {
-    setSyncIndicator(true);
-    const delta = await syncArticles();
-
-    if (delta.fullSync) {
-      // Full re-sync (first load or expired delta token):
-      // reconcile cache to exactly mirror OneDrive, removing stale entries
-      articles = await reconcileCache(delta.upserted);
-      cachedIds = await getCachedHtmlIds();
-      renderList();
-      updateFooter();
-
-      if (delta.usedIndex) {
-        // Index was used — bootstrap a delta token in the background so the
-        // next sync can be incremental, and catch any articles added since
-        // the index was last built.
-        const knownIds = new Set(delta.upserted.map(a => a.id));
-        bootstrapDeltaToken(knownIds).then(async (result) => {
-          let changed = false;
-          if (result.newMetas.length > 0) {
-            articles = await mergeDeltaIntoCache(result.newMetas, []);
-            changed = true;
-          }
-          if (result.deletedIds.length > 0) {
-            articles = await mergeDeltaIntoCache([], result.deletedIds);
-            for (const id of result.deletedIds) cachedIds.delete(id);
-            changed = true;
-          }
-          if (changed) {
-            renderList();
-            updateFooter();
-          }
-          // Rebuild the index with the fully up-to-date article list
-          rebuildIndex(articles).catch(() => {});
-        }).catch(() => {});
-      } else {
-        // Delta/list sync — rebuild the index with fresh data
-        rebuildIndex(articles).catch(() => {});
-      }
-    } else if (delta.upserted.length > 0 || delta.deleted.length > 0) {
-      // Incremental sync: merge changes into existing cache
-      articles = await mergeDeltaIntoCache(delta.upserted, delta.deleted);
-
-      // Remove deleted IDs from cached HTML set
-      for (const id of delta.deleted) cachedIds.delete(id);
-
-      renderList();
-      updateFooter();
-
-      // Rebuild the index to reflect changes
-      rebuildIndex(articles).catch(() => {});
-    }
-  } catch (err) {
-    console.warn('Background sync failed:', err);
-    if (cached.length === 0) {
-      showToast('Could not load articles. Check your connection.', 'error');
-    }
-  } finally {
-    setSyncIndicator(false);
   }
 }
 
@@ -550,6 +531,9 @@ function showPendingProgress(job: PendingJob): void {
 async function openArticle(id: string): Promise<void> {
   currentId = id;
   selectedPendingId = null;
+  // Increment epoch so any in-flight openArticle for a previous selection
+  // discards its result instead of overwriting the iframe (Fix 8: U1)
+  const epoch = ++openArticleEpoch;
   renderList(); // Update active state
 
   const meta = articles.find(a => a.id === id);
@@ -566,16 +550,22 @@ async function openArticle(id: string): Promise<void> {
 
     try {
       html = await downloadArticleHtml(id);
+      // Check epoch before rendering — user may have clicked another article
+      if (epoch !== openArticleEpoch) return;
       await cacheHtml(id, html, meta.size);
       cachedIds.add(id);
       renderList(); // Update cloud badge
       updateFooter();
     } catch (err) {
+      if (epoch !== openArticleEpoch) return;
       console.error('Failed to download article:', err);
       showReaderState('error', 'Failed to download article. Check your connection.');
       return;
     }
   }
+
+  // Final epoch check before rendering
+  if (epoch !== openArticleEpoch) return;
 
   // Render article header
   const headerBar = document.getElementById('articleHeaderBar')!;
@@ -798,40 +788,23 @@ function setupArticleActions(meta: OneDriveArticleMeta): void {
   }
 }
 
-async function toggleFavorite(id: string): Promise<void> {
+function toggleFavorite(id: string): void {
   const meta = articles.find(a => a.id === id);
   if (!meta) return;
 
-  // Optimistic update
-  meta.isFavorite = !meta.isFavorite;
-  meta.updatedAt = Date.now();
-
-  // Update UI
+  // Update UI immediately
   const favBtn = document.getElementById('favBtn');
   if (favBtn) {
-    favBtn.classList.toggle('active', meta.isFavorite);
+    favBtn.classList.toggle('active', !meta.isFavorite);
   }
-  renderList();
 
-  // Persist to local cache
-  await cacheMeta(meta);
-
-  // Push to OneDrive
-  try {
-    await uploadMeta(meta);
-    rebuildIndex(articles).catch(() => {});
-  } catch (err) {
-    console.error('Failed to sync favorite:', err);
-    // Revert
-    meta.isFavorite = !meta.isFavorite;
-    meta.updatedAt = Date.now();
-    if (favBtn) {
-      favBtn.classList.toggle('active', meta.isFavorite);
-    }
-    renderList();
-    await cacheMeta(meta);
-    showToast('Failed to update favorite', 'error');
-  }
+  // Delegate to coordinator — optimistic update, cache, upload, retry, rollback
+  mutateArticle(id, m => { m.isFavorite = !m.isFavorite; }, {
+    mergeFn: (local, remote) => {
+      remote.isFavorite = local.isFavorite;
+      return remote;
+    },
+  });
 }
 
 async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
@@ -841,17 +814,8 @@ async function confirmDeleteArticle(meta: OneDriveArticleMeta): Promise<void> {
   }
 
   try {
-    // Remove from OneDrive
-    await deleteArticle(meta.id);
-    // Remove from local cache
-    await deleteCachedArticle(meta.id);
-    // Remove from in-memory list
-    articles = articles.filter(a => a.id !== meta.id);
-    cachedIds.delete(meta.id);
-    // Navigate back
     goBack();
-    updateFooter();
-    rebuildIndex(articles).catch(() => {});
+    await removeArticle(meta.id);
     showToast('Article deleted');
   } catch (err) {
     console.error('Failed to delete article:', err);
@@ -936,7 +900,11 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
         close();
       } catch (err) {
         console.error('Failed to unshare:', err);
-        showToast('Failed to remove share link', 'error');
+        const is412 = err instanceof Error && err.message.includes('412');
+        showToast(
+          is412 ? 'This article changed on another device. Sync and retry.' : 'Failed to remove share link',
+          'error',
+        );
         btn.disabled = false;
         btn.textContent = 'Unshare';
       }
@@ -1060,7 +1028,11 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
         });
       } catch (err) {
         console.error('Failed to share article:', err);
-        showToast(err instanceof Error ? err.message : 'Failed to share article', 'error');
+        const is412 = err instanceof Error && err.message.includes('412');
+        showToast(
+          is412 ? 'This article changed on another device. Sync and retry.' : (err instanceof Error ? err.message : 'Failed to share article'),
+          'error',
+        );
         confirmBtn.disabled = false;
         confirmBtn.textContent = '📤 Share';
         cancelBtn.style.display = '';
@@ -1126,14 +1098,15 @@ function setupUserMenu(): void {
     dropdown.classList.toggle('hidden');
   });
 
-  document.addEventListener('click', () => {
+  trackListener(document, 'click', () => {
     dropdown.classList.add('hidden');
   });
 
   document.getElementById('signOutBtn')!.addEventListener('click', async () => {
     await clearCache();
-    clearDeltaToken();
+    await clearDeltaToken();
     await signOut();
+    postBroadcast({ type: 'auth-changed', signedIn: false });
     window.location.reload();
   });
 
@@ -1144,14 +1117,13 @@ function setupUserMenu(): void {
 
   document.getElementById('clearCacheBtn')!.addEventListener('click', async () => {
     await clearCache();
-    clearDeltaToken();
+    await clearDeltaToken();
+    setArticles([]);
+    updateCachedIds(new Set());
     cachedIds = new Set();
-    articles = [];
-    renderList();
-    updateFooter();
     showToast('Cache cleared — syncing…');
     dropdown.classList.add('hidden');
-    await loadArticles();
+    await requestSync();
   });
 }
 
@@ -1219,11 +1191,12 @@ function setupResizeHandle(): void {
 }
 
 function setupKeyboardShortcuts(): void {
-  document.addEventListener('keydown', (e) => {
+  const handler = (e: Event) => {
+    const ke = e as KeyboardEvent;
     // Don't handle if typing in input
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-      if (e.key === 'Escape') {
-        (e.target as HTMLElement).blur();
+    if (ke.target instanceof HTMLInputElement || ke.target instanceof HTMLTextAreaElement) {
+      if (ke.key === 'Escape') {
+        (ke.target as HTMLElement).blur();
         const clearBtn = document.getElementById('searchClear');
         if (clearBtn) clearBtn.click();
       }
@@ -1233,7 +1206,7 @@ function setupKeyboardShortcuts(): void {
     const filtered = getFilteredArticles();
     const currentIndex = currentId ? filtered.findIndex(a => a.id === currentId) : -1;
 
-    switch (e.key) {
+    switch (ke.key) {
       case 'j': // Next article
         if (currentIndex < filtered.length - 1) {
           openArticle(filtered[currentIndex + 1].id);
@@ -1248,7 +1221,7 @@ function setupKeyboardShortcuts(): void {
         if (currentId) toggleFavorite(currentId);
         break;
       case '/': // Focus search
-        e.preventDefault();
+        ke.preventDefault();
         document.getElementById('searchInput')?.focus();
         break;
       case 'Escape': // Close reader on mobile
@@ -1257,26 +1230,112 @@ function setupKeyboardShortcuts(): void {
         }
         break;
     }
-  });
+  };
+  trackListener(document, 'keydown', handler);
 }
 
 function setupOfflineHandling(): void {
   const updateStatus = () => {
     document.body.classList.toggle('is-offline', !navigator.onLine);
   };
-  window.addEventListener('online', updateStatus);
-  window.addEventListener('offline', updateStatus);
+  trackListener(window, 'online', updateStatus);
+  trackListener(window, 'offline', updateStatus);
   updateStatus();
+}
+
+/**
+ * Listen for cross-tab broadcast events (Fix 10).
+ * When another tab syncs or mutates an article, refresh from cache.
+ */
+function setupBroadcastListener(): void {
+  const unsubscribe = onBroadcast(async (event) => {
+    switch (event.type) {
+      case 'sync-complete':
+      case 'article-mutated':
+        // Refresh from cache without triggering a Graph sync
+        await refreshFromCache();
+        break;
+      // auth-changed and settings-updated are handled by main.ts / settings.ts
+    }
+  });
+  screenCleanups.push(unsubscribe);
 }
 
 function setupSyncButton(): void {
   const syncBtn = document.getElementById('syncBtn');
   if (syncBtn) {
     syncBtn.addEventListener('click', async () => {
-      await loadArticles();
+      await requestSync();
       showToast('Sync complete');
     });
   }
+}
+
+/**
+ * Subscribe to SyncCoordinator events and map them to UI updates (Fix 20).
+ * Also wires the divergence "Refresh from Cloud" button (Fix 16).
+ */
+function setupCoordinator(): void {
+  // Divergence refresh button (Fix 16)
+  const refreshBtn = document.getElementById('divergenceRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      const notice = document.getElementById('divergenceNotice');
+      if (notice) notice.classList.add('hidden');
+      await forceFullSync();
+      showToast('Refreshed from cloud');
+    });
+  }
+
+  const unsubscribe = subscribeCoordinator((event) => {
+    switch (event.type) {
+      case 'sync-start':
+        setSyncIndicator(true);
+        break;
+
+      case 'sync-end':
+        setSyncIndicator(false);
+        updateFooter();
+        break;
+
+      case 'articles-updated':
+        articles = event.articles;
+        cachedIds = event.cachedIds;
+        renderList();
+        updateFooter();
+        break;
+
+      case 'sync-message':
+        updateSyncFooter(event.message);
+        break;
+
+      case 'divergence': {
+        const notice = document.getElementById('divergenceNotice');
+        if (notice) notice.classList.toggle('hidden', !event.show);
+        break;
+      }
+
+      case 'sync-error':
+        if (!event.hasCache) {
+          showToast('Could not load articles. Check your connection and try again.', 'error');
+        }
+        break;
+
+      case 'mutation-reverted':
+        showToast('Failed to save change — reverted', 'error');
+        // Re-sync the favorite button state if the reader is open
+        if (currentId === event.articleId) {
+          const meta = articles.find(a => a.id === event.articleId);
+          const favBtn = document.getElementById('favBtn');
+          if (meta && favBtn) {
+            favBtn.classList.toggle('active', meta.isFavorite);
+          }
+        }
+        break;
+    }
+  });
+  screenCleanups.push(unsubscribe);
+  screenCleanups.push(() => destroyCoordinator());
 }
 
 function setupAddUrl(): void {
@@ -1418,9 +1477,26 @@ function setSyncIndicator(syncing: boolean): void {
 
 async function updateFooter(): Promise<void> {
   const statsEl = document.getElementById('sidebarFooterStats')!;
+  // Don't overwrite a transient sync message (Fix 6)
+  if (statsEl.dataset.syncMessage) return;
   const stats = await getCacheStats();
   const sizeMB = (stats.totalSize / (1024 * 1024)).toFixed(1);
-  statsEl.textContent = `${articles.length} articles · ${stats.count} cached · ${sizeMB} MB`;
+  // Show last synced time (Fix 13)
+  const lastSync = await getSettingsValue<number>('lastSyncTime');
+  const syncLabel = lastSync ? ` · synced ${formatRelativeTime(lastSync)}` : '';
+  statsEl.textContent = `${articles.length} articles · ${stats.count} cached · ${sizeMB} MB${syncLabel}`;
+}
+
+/** Format a timestamp as a human-readable relative time string */
+function formatRelativeTime(timestamp: number): string {
+  const seconds = Math.round((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
 }
 
 function fixAnchorLinks(frame: HTMLIFrameElement): void {
@@ -1576,7 +1652,7 @@ function startPendingPoll(job: PendingJob): void {
 
       try {
         const prevCount = articles.length;
-        await loadArticles();
+        await requestSync();
 
         // If new articles appeared, check if any match this job's URL
         if (articles.length > prevCount) {

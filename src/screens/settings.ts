@@ -16,6 +16,7 @@ import { isSignedIn } from '../services/auth';
 import { showToast } from '../components/toast';
 import { redeemGiftToken } from '../services/gift-token';
 import { escapeHtml } from '../utils/storage';
+import { postBroadcast } from '../services/broadcast';
 import type { TransmogrifierSettings, AIProvider, ImageProvider, SharingProvider } from '../types';
 
 export function renderSettings(root: HTMLElement): void {
@@ -484,6 +485,7 @@ async function doSave(): Promise<void> {
   await saveSettings(settings);
   updateBadges(settings);
   flashSaveIndicator();
+  postBroadcast({ type: 'settings-updated' });
 }
 
 function flashSaveIndicator(): void {
@@ -518,6 +520,7 @@ function setupSyncButtons(): void {
         updateBadges(settings);
         statusEl.textContent = 'Settings pulled from OneDrive ✓';
         showToast('Settings updated from cloud');
+        postBroadcast({ type: 'settings-updated' });
       } else {
         statusEl.textContent = 'Local settings are already up to date';
         showToast('Already up to date');
@@ -648,6 +651,7 @@ function setupGiftToken(): void {
     try {
       await redeemGiftToken(token);
       showToast('Gift token redeemed — settings imported!');
+      postBroadcast({ type: 'settings-updated' });
 
       // Re-render the entire settings screen so imported values appear
       const root = document.getElementById('app')!;

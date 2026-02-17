@@ -184,6 +184,7 @@ export async function getAccessToken(): Promise<string> {
     }
     // Keep IndexedDB backup fresh after every successful token acquisition
     backupMsalCache().catch(() => {});
+    console.debug('[Auth] Token acquired silently, expires: %s', result.expiresOn?.toISOString());
     return result.accessToken;
   } catch (err) {
     // In PWA standalone/WCO mode, iframe-based silent renewal often fails
@@ -202,13 +203,18 @@ export async function getAccessToken(): Promise<string> {
           return result.accessToken;
         }
       } catch (retryErr) {
-        console.warn('[Auth] Refresh token retry also failed:', retryErr);
-        // Fall through to interactive redirect
+        console.warn('[Auth] Refresh token retry also failed, redirecting for interactive auth:', retryErr);
+        // BrowserAuthError retry exhausted — redirect for interactive auth
+        // (previously fell through to an InteractionRequiredAuthError check
+        // that never matched, leaving the user stuck signed out)
+        await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
+        throw new Error('Redirecting for token…');
       }
     }
 
     if (err instanceof InteractionRequiredAuthError) {
       // Redirect for interactive token — silent refresh failed
+      console.debug('[Auth] InteractionRequiredAuthError — redirecting for interactive auth');
       await msal.acquireTokenRedirect({ scopes: LOGIN_SCOPES });
       throw new Error('Redirecting for token…');
     }
@@ -375,11 +381,12 @@ export async function tryRecoverAuth(): Promise<boolean> {
 
 /**
  * Proactively refresh the access token when the app resumes from background.
- * Called on visibilitychange → visible. Prevents stale-token errors on the
- * first Graph call after resume.
+ * Called on visibilitychange → visible.
  *
- * Fails silently — if the token can't be refreshed, the next Graph call will
- * handle the error with its own retry/redirect logic.
+ * Strategy (Fix 12): Try non-forced silent first (cheap — returns cached
+ * token if still valid). Only escalate to forceRefresh if that fails.
+ * This replaces the previous always-forceRefresh approach which was
+ * unnecessarily expensive and triggered rate limits.
  */
 export async function refreshTokenOnResume(): Promise<void> {
   if (!msalInstance) return;
@@ -387,15 +394,31 @@ export async function refreshTokenOnResume(): Promise<void> {
   if (!account) return;
 
   try {
+    // Step 1: cheap silent acquire (uses cached token if still valid)
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: LOGIN_SCOPES,
+      account,
+    });
+    if (result.accessToken) {
+      console.debug('[Auth] Resume: cached token still valid, expires: %s',
+        result.expiresOn?.toISOString());
+      return;
+    }
+  } catch {
+    // Cached token is stale/expired — escalate to forceRefresh
+  }
+
+  try {
+    // Step 2: force refresh via refresh token (no iframe)
     await msalInstance.acquireTokenSilent({
       scopes: LOGIN_SCOPES,
       account,
       forceRefresh: true,
     });
     backupMsalCache().catch(() => {});
-    console.debug('[Auth] Proactive token refresh on resume succeeded');
+    console.debug('[Auth] Resume: token refreshed via refresh token');
   } catch {
     // Not critical — the next getAccessToken() call will handle refresh
-    console.debug('[Auth] Proactive token refresh on resume skipped/failed');
+    console.debug('[Auth] Resume: token refresh failed — will recover on next Graph call');
   }
 }

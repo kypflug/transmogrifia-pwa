@@ -36,6 +36,15 @@ function isMsalKey(key: string): boolean {
   return MSAL_KEY_PATTERNS.some(p => key.includes(p));
 }
 
+/**
+ * Keys matching these patterns are transient interaction state that must NOT
+ * be persisted to IndexedDB. Restoring them after an iOS process kill causes
+ * `interaction_in_progress` errors, blocking sign-in entirely.
+ */
+function isInteractionStateKey(key: string): boolean {
+  return key.includes('interaction.status') || key.includes('request.params');
+}
+
 function openBackupDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -59,7 +68,7 @@ export async function backupMsalCache(): Promise<void> {
     const snapshot: Record<string, string> = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && isMsalKey(key)) {
+      if (key && isMsalKey(key) && !isInteractionStateKey(key)) {
         const val = localStorage.getItem(key);
         if (val !== null) snapshot[key] = val;
       }
@@ -117,9 +126,10 @@ export async function restoreMsalCacheIfNeeded(): Promise<boolean> {
 
     if (!snapshot || Object.keys(snapshot).length === 0) return false;
 
-    // Restore each key to localStorage
+    // Restore each key to localStorage, skipping stale interaction state
     let restored = 0;
     for (const [key, value] of Object.entries(snapshot)) {
+      if (isInteractionStateKey(key)) continue;
       try {
         localStorage.setItem(key, value);
         restored++;

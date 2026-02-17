@@ -76,6 +76,7 @@ export async function mergeDeltaIntoCache(
   upserted: OneDriveArticleMeta[],
   deleted: string[],
 ): Promise<OneDriveArticleMeta[]> {
+  console.debug('[Cache] mergeDeltaIntoCache: upserted=%d, deleted=%d', upserted.length, deleted.length);
   const database = await getDB();
 
   // Phase 1: Read existing metadata to detect size changes (content regeneration)
@@ -171,6 +172,7 @@ export async function getCachedMeta(): Promise<OneDriveArticleMeta[]> {
 export async function reconcileCache(
   currentArticles: OneDriveArticleMeta[],
 ): Promise<OneDriveArticleMeta[]> {
+  console.debug('[Cache] reconcileCache: %d articles', currentArticles.length);
   const currentIds = new Set(currentArticles.map(m => m.id));
   const database = await getDB();
 

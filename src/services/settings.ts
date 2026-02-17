@@ -24,6 +24,8 @@ const SETTINGS_VERSION = 1;
 interface StoredSettings {
   envelope: LocalEncryptedEnvelope;
   updatedAt: number;
+  /** Monotonic version counter for clock-skew-safe conflict resolution (Fix 17) */
+  syncVersion?: number;
 }
 
 // ─── In-memory state ────────────────
@@ -80,6 +82,10 @@ export async function saveSettings(settings: TransmogrifierSettings): Promise<vo
   settings.updatedAt = Date.now();
   settings.version = SETTINGS_VERSION;
 
+  // Increment monotonic version counter (Fix 17)
+  const existing = await getSettingsValue<StoredSettings>('envelope');
+  const nextVersion = (existing?.syncVersion ?? 0) + 1;
+
   const key = await getDeviceKey();
   const json = JSON.stringify(settings);
   const envelope = await encryptWithKey(json, key);
@@ -87,12 +93,13 @@ export async function saveSettings(settings: TransmogrifierSettings): Promise<vo
   const stored: StoredSettings = {
     envelope,
     updatedAt: settings.updatedAt,
+    syncVersion: nextVersion,
   };
 
   await setSettingsValue('envelope', stored);
   cachedSettings = settings;
 
-  console.log('[Settings] Saved settings (device-key encrypted)');
+  console.log('[Settings] Saved settings (device-key encrypted), syncVersion:', nextVersion);
 }
 
 /**
@@ -129,10 +136,14 @@ export async function pushSettingsToCloud(): Promise<void> {
     throw new Error('No settings to push. Configure your settings first.');
   }
 
-  console.log('[Settings] Encrypting for sync, userId prefix:', userId.substring(0, 8) + '…');
+  // Read current syncVersion for the cloud payload (Fix 17)
+  const stored = await getSettingsValue<StoredSettings>('envelope');
+  const syncVersion = stored?.syncVersion ?? 1;
+
+  console.log('[Settings] Encrypting for sync, userId prefix:', userId.substring(0, 8) + '…', 'syncVersion:', syncVersion);
   const json = JSON.stringify(settings);
   const envelope = await encryptWithIdentityKey(json, userId);
-  await uploadSettings(envelope, settings.updatedAt);
+  await uploadSettings(envelope, settings.updatedAt, syncVersion);
 
   console.log('[Settings] Pushed settings to OneDrive');
 }
@@ -156,10 +167,22 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
   }
 
   // Check if local is newer (before expensive decryption)
+  // Fix 17: Use syncVersion as primary conflict signal, fall back to updatedAt
   const stored = await getSettingsValue<StoredSettings>('envelope');
-  if (stored && stored.updatedAt >= cloudFile.updatedAt) {
-    console.log('[Settings] Local settings are newer, skipping import');
-    return false;
+  if (stored) {
+    const localVer = stored.syncVersion ?? 0;
+    const cloudVer = cloudFile.syncVersion ?? 0;
+    if (localVer > 0 && cloudVer > 0) {
+      // Both have version counters — compare versions
+      if (localVer >= cloudVer) {
+        console.log('[Settings] Local syncVersion (%d) >= cloud (%d), skipping import', localVer, cloudVer);
+        return false;
+      }
+    } else if (stored.updatedAt >= cloudFile.updatedAt) {
+      // Fallback to timestamp comparison
+      console.log('[Settings] Local settings are newer (timestamp), skipping import');
+      return false;
+    }
   }
 
   const envelope = cloudFile.envelope;
@@ -194,11 +217,12 @@ export async function pullSettingsFromCloud(): Promise<boolean> {
   const newStored: StoredSettings = {
     envelope: localEnvelope,
     updatedAt: settings.updatedAt,
+    syncVersion: cloudFile.syncVersion ?? 0,
   };
   await setSettingsValue('envelope', newStored);
   cachedSettings = settings;
 
-  console.log('[Settings] Imported settings from cloud (re-encrypted with device key)');
+  console.log('[Settings] Imported settings from cloud (re-encrypted with device key), syncVersion:', newStored.syncVersion);
   return true;
 }
 
