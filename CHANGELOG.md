@@ -8,6 +8,20 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.7] — 2026-02-17
+
+### Added
+
+- **Blocked-source badge in Library list** — Articles marked with `source-fetch-blocked-401-403` now show a warning badge so users can identify failed saves quickly.
+
+- **Blocked-source warning in reader header** — Reader header now displays a clear warning + direct original URL link for blocked-source fallback articles.
+
+### Changed
+
+- **Blocked-source status surfaced from article metadata** — Reader/list rendering paths now consistently display `rssFallbackReason`-derived status when present.
+
+---
+
 ## [1.5.6] — 2026-02-17
 
 ### Added
