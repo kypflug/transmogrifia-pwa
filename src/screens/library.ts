@@ -35,7 +35,7 @@ import {
 import { renderArticleList } from '../components/article-list';
 import { renderArticleHeader } from '../components/article-header';
 import { showToast } from '../components/toast';
-import { RECIPES, PICKER_RECIPES } from '../recipes';
+import { RECIPES, PICKER_RECIPES, getDefaultRecipeId, recipeRequiresAI } from '../recipes';
 import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
 import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
@@ -63,6 +63,8 @@ let container: HTMLElement;
 let pendingJobs: PendingJob[] = [];
 let selectedPendingId: string | null = null;
 let activeBlobUrls: string[] = [];
+let readerProgressCleanup: CleanupFn | null = null;
+let readerProgressRafPending = false;
 
 /** Epoch counter for openArticle race protection (Fix 8: U1) */
 let openArticleEpoch = 0;
@@ -86,7 +88,94 @@ function trackListener<K extends keyof DocumentEventMap>(
 export function teardownScreenListeners(): void {
   for (const cleanup of screenCleanups) cleanup();
   screenCleanups = [];
+  detachReaderProgressTracking();
 }
+
+function setReaderProgress(percent: number): void {
+  const fill = document.getElementById('readerProgressFill') as HTMLElement | null;
+  if (!fill) return;
+  const clamped = Math.max(0, Math.min(100, percent));
+  fill.style.width = `${clamped}%`;
+}
+
+function resetReaderProgress(): void {
+  setReaderProgress(0);
+}
+
+function getFrameScrollPercent(frame: HTMLIFrameElement): number {
+  const doc = frame.contentDocument;
+  if (!doc) return 0;
+
+  const html = doc.documentElement;
+  const body = doc.body;
+  if (!html) return 0;
+
+  let scrollTop = 0;
+  let scrollHeight = 0;
+  let clientHeight = 0;
+
+  if (html.scrollHeight > html.clientHeight + 1) {
+    scrollTop = html.scrollTop;
+    scrollHeight = html.scrollHeight;
+    clientHeight = html.clientHeight;
+  } else if (body && body.scrollHeight > body.clientHeight + 1) {
+    scrollTop = body.scrollTop;
+    scrollHeight = body.scrollHeight;
+    clientHeight = body.clientHeight;
+  } else {
+    // Non-scrollable documents are effectively complete.
+    return 100;
+  }
+
+  const maxScroll = Math.max(1, scrollHeight - clientHeight);
+  return (scrollTop / maxScroll) * 100;
+}
+
+function detachReaderProgressTracking(): void {
+  if (readerProgressCleanup) {
+    readerProgressCleanup();
+    readerProgressCleanup = null;
+  }
+  readerProgressRafPending = false;
+}
+
+function attachReaderProgressTracking(frame: HTMLIFrameElement): void {
+  detachReaderProgressTracking();
+
+  const doc = frame.contentDocument;
+  if (!doc) {
+    resetReaderProgress();
+    return;
+  }
+
+  const html = doc.documentElement;
+  const body = doc.body;
+
+  const scheduleUpdate = () => {
+    if (readerProgressRafPending) return;
+    readerProgressRafPending = true;
+    requestAnimationFrame(() => {
+      readerProgressRafPending = false;
+      setReaderProgress(getFrameScrollPercent(frame));
+    });
+  };
+
+  const options = { passive: true } as const;
+  doc.addEventListener('scroll', scheduleUpdate, options);
+  html?.addEventListener('scroll', scheduleUpdate, options);
+  body?.addEventListener('scroll', scheduleUpdate, options);
+  window.addEventListener('resize', scheduleUpdate, options);
+
+  readerProgressCleanup = () => {
+    doc.removeEventListener('scroll', scheduleUpdate);
+    html?.removeEventListener('scroll', scheduleUpdate);
+    body?.removeEventListener('scroll', scheduleUpdate);
+    window.removeEventListener('resize', scheduleUpdate);
+  };
+
+  scheduleUpdate();
+}
+
 function releaseActiveBlobUrls(): void {
   for (const url of activeBlobUrls) {
     URL.revokeObjectURL(url);
@@ -308,6 +397,9 @@ export function renderLibrary(root: HTMLElement): void {
         </div>
         <div class="reader-content hidden" id="readerContent">
           <div class="article-header-bar" id="articleHeaderBar"></div>
+          <div class="reader-scroll-progress hidden" id="readerScrollProgress" aria-hidden="true">
+            <div class="reader-scroll-progress-fill" id="readerProgressFill"></div>
+          </div>
           <iframe
             id="contentFrame"
             class="content-frame"
@@ -529,6 +621,9 @@ function showPendingProgress(job: PendingJob): void {
 }
 
 async function openArticle(id: string): Promise<void> {
+  detachReaderProgressTracking();
+  resetReaderProgress();
+
   currentId = id;
   selectedPendingId = null;
   // Increment epoch so any in-flight openArticle for a previous selection
@@ -689,6 +784,7 @@ async function openArticle(id: string): Promise<void> {
 
       fixAnchorLinks(frame);
       fixScrollBlocking(frame);
+      attachReaderProgressTracking(frame);
 
       // Resolve OneDrive image assets lazily (text is already visible).
       // meta is guaranteed non-null — openArticle returns early if not found.
@@ -728,6 +824,8 @@ async function openArticle(id: string): Promise<void> {
 }
 
 function goBack(): void {
+  detachReaderProgressTracking();
+  resetReaderProgress();
   destroyGestures();
   releaseActiveBlobUrls();
   document.body.classList.remove('mobile-reading');
@@ -1074,12 +1172,19 @@ function showReaderState(state: 'placeholder' | 'loading' | 'content' | 'error' 
   const content = document.getElementById('readerContent')!;
   const error = document.getElementById('readerError')!;
   const progress = document.getElementById('readingProgress')!;
+  const readerProgress = document.getElementById('readerScrollProgress');
 
   placeholder.classList.toggle('hidden', state !== 'placeholder');
   loading.classList.toggle('hidden', state !== 'loading');
   content.classList.toggle('hidden', state !== 'content');
   error.classList.toggle('hidden', state !== 'error');
   progress.classList.toggle('hidden', state !== 'progress');
+  if (readerProgress) readerProgress.classList.toggle('hidden', state !== 'content');
+
+  if (state !== 'content') {
+    detachReaderProgressTracking();
+    resetReaderProgress();
+  }
 
   // Hide the WCO titlebar strip when the article header is visible
   const titlebar = document.getElementById('readerTitlebar');
@@ -1359,8 +1464,7 @@ function setupAddUrl(): void {
   if (!addBtn) return;
 
   addBtn.addEventListener('click', async () => {
-    // Check prerequisites
-    const error = await checkQueuePrereqs();
+    const error = await checkQueuePrereqs(getDefaultRecipeId());
     if (error) {
       showToast(error, 'error');
       return;
@@ -1373,9 +1477,11 @@ export function showAddUrlModal(prefillUrl?: string): void {
   // Remove existing modal if any
   document.getElementById('addUrlModal')?.remove();
 
-  const recipeOptions = PICKER_RECIPES.map(r =>
-    `<option value="${escapeHtml(r.id)}">${escapeHtml(r.icon + ' ' + r.name)}</option>`
-  ).join('');
+  const defaultRecipeId = getDefaultRecipeId();
+  const recipeOptions = PICKER_RECIPES.map(r => {
+    const selected = r.id === defaultRecipeId ? ' selected' : '';
+    return `<option value="${escapeHtml(r.id)}"${selected}>${escapeHtml(r.icon + ' ' + r.name)}</option>`;
+  }).join('');
 
   const overlay = document.createElement('div');
   overlay.id = 'addUrlModal';
@@ -1455,8 +1561,16 @@ export function showAddUrlModal(prefillUrl?: string): void {
     }
 
     const recipe = recipeSelect.value;
+    const prereqError = await checkQueuePrereqs(recipe);
+    if (prereqError) {
+      showToast(prereqError, 'error');
+      return;
+    }
+
     const customPrompt = (document.getElementById('addUrlPrompt') as HTMLInputElement).value.trim() || undefined;
-    const generateImages = (document.getElementById('addUrlImages') as HTMLInputElement).checked;
+    const generateImages = recipeRequiresAI(recipe)
+      ? (document.getElementById('addUrlImages') as HTMLInputElement).checked
+      : false;
 
     const submitBtn = document.getElementById('addUrlSubmit') as HTMLButtonElement;
     submitBtn.disabled = true;

@@ -216,6 +216,19 @@
 }
 
 /* ===== Content Iframe ===== */
+.reader-scroll-progress {
+  height: 3px;
+  background: var(--edge-border-subtle);
+  flex-shrink: 0;
+}
+
+.reader-scroll-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--edge-blue);
+  transition: width 0.08s linear;
+}
+
 .content-frame {
   flex: 1;
   width: 100%;

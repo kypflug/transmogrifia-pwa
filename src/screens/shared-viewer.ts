@@ -57,6 +57,88 @@ export async function renderSharedViewer(
   container: HTMLElement,
   shortCode: string,
 ): Promise<void> {
+  let cleanupProgressTracking: (() => void) | null = null;
+  let progressRafPending = false;
+
+  const setSharedProgress = (percent: number) => {
+    const fill = document.getElementById('sharedProgressFill') as HTMLElement | null;
+    if (!fill) return;
+    const clamped = Math.max(0, Math.min(100, percent));
+    fill.style.width = `${clamped}%`;
+  };
+
+  const getSharedScrollPercent = (frame: HTMLIFrameElement): number => {
+    const doc = frame.contentDocument;
+    if (!doc) return 0;
+
+    const html = doc.documentElement;
+    const body = doc.body;
+    if (!html) return 0;
+
+    let scrollTop = 0;
+    let scrollHeight = 0;
+    let clientHeight = 0;
+
+    if (html.scrollHeight > html.clientHeight + 1) {
+      scrollTop = html.scrollTop;
+      scrollHeight = html.scrollHeight;
+      clientHeight = html.clientHeight;
+    } else if (body && body.scrollHeight > body.clientHeight + 1) {
+      scrollTop = body.scrollTop;
+      scrollHeight = body.scrollHeight;
+      clientHeight = body.clientHeight;
+    } else {
+      return 100;
+    }
+
+    const maxScroll = Math.max(1, scrollHeight - clientHeight);
+    return (scrollTop / maxScroll) * 100;
+  };
+
+  const detachProgressTracking = () => {
+    if (cleanupProgressTracking) {
+      cleanupProgressTracking();
+      cleanupProgressTracking = null;
+    }
+    progressRafPending = false;
+  };
+
+  const attachProgressTracking = (frame: HTMLIFrameElement) => {
+    detachProgressTracking();
+    const doc = frame.contentDocument;
+    if (!doc) {
+      setSharedProgress(0);
+      return;
+    }
+
+    const html = doc.documentElement;
+    const body = doc.body;
+
+    const scheduleUpdate = () => {
+      if (progressRafPending) return;
+      progressRafPending = true;
+      requestAnimationFrame(() => {
+        progressRafPending = false;
+        setSharedProgress(getSharedScrollPercent(frame));
+      });
+    };
+
+    const options = { passive: true } as const;
+    doc.addEventListener('scroll', scheduleUpdate, options);
+    html?.addEventListener('scroll', scheduleUpdate, options);
+    body?.addEventListener('scroll', scheduleUpdate, options);
+    window.addEventListener('resize', scheduleUpdate, options);
+
+    cleanupProgressTracking = () => {
+      doc.removeEventListener('scroll', scheduleUpdate);
+      html?.removeEventListener('scroll', scheduleUpdate);
+      body?.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+    };
+
+    scheduleUpdate();
+  };
+
   // Show loading state
   container.innerHTML = `
     <div class="shared-viewer">
@@ -65,6 +147,9 @@ export async function renderSharedViewer(
           <img src="/icons/icon-64.png" alt="" width="24" height="24">
           <span>Transmogrifia</span>
         </a>
+      </div>
+      <div class="shared-viewer-progress hidden" id="sharedProgress" aria-hidden="true">
+        <div class="shared-viewer-progress-fill" id="sharedProgressFill"></div>
       </div>
       <div class="shared-viewer-loading" id="sharedLoading">
         <div class="shared-viewer-spinner"></div>
@@ -166,6 +251,9 @@ export async function renderSharedViewer(
     frame.addEventListener('load', () => {
       if (loading) loading.style.display = 'none';
       frame.style.display = 'block';
+      const progress = document.getElementById('sharedProgress');
+      if (progress) progress.classList.remove('hidden');
+      attachProgressTracking(frame);
 
       // Fix links to open in new tab
       const doc = frame.contentDocument;
@@ -193,6 +281,7 @@ export async function renderSharedViewer(
       `;
     }
   } catch (err) {
+    detachProgressTracking();
     const message = err instanceof Error ? err.message : 'Something went wrong.';
     container.innerHTML = `
       <div class="shared-viewer">

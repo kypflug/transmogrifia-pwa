@@ -6,6 +6,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Reader progress meter (PWA library + shared viewer)** — Added a thin top reading-progress bar that tracks scroll position inside sandboxed article iframes.
+
+- **Cross-browser iframe scroll-root handling** — Progress calculation now detects whether `documentElement` or `body` is the active scroll container and clamps correctly for non-scrollable documents.
+
+- **Reader-state progress lifecycle resets** — Progress tracking/listeners reset cleanly when leaving article-content state (placeholder, loading, error, in-progress cloud job), preventing stale bars between article switches.
+
 ---
 
 ## [1.5.5] — 2026-02-17

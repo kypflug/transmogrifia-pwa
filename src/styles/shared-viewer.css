@@ -18,6 +18,19 @@
   min-height: 48px;
 }
 
+.shared-viewer-progress {
+  height: 3px;
+  background: var(--edge-border-subtle);
+  flex-shrink: 0;
+}
+
+.shared-viewer-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--edge-blue);
+  transition: width 0.08s linear;
+}
+
 .shared-viewer-brand {
   display: flex;
   align-items: center;

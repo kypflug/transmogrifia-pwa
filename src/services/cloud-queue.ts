@@ -15,6 +15,7 @@
 import { getAccessToken } from './auth';
 import { loadSettings, getEffectiveAIConfig, getEffectiveImageConfig } from './settings';
 import type { UserAIConfig, UserImageConfig, TransmogrifierSettings } from '../types';
+import { getDefaultRecipeId, recipeRequiresAI } from '../recipes';
 
 const CLOUD_API_URL = 'https://transmogrifier-api.azurewebsites.net';
 
@@ -29,7 +30,11 @@ export interface CloudQueueResponse {
  * Check prerequisites for cloud queue (signed in, cloud URL set, AI configured).
  * Returns null if ready, or a user-facing error message string.
  */
-export async function checkQueuePrereqs(): Promise<string | null> {
+export async function checkQueuePrereqs(recipeId: string = getDefaultRecipeId()): Promise<string | null> {
+  if (!recipeRequiresAI(recipeId)) {
+    return null;
+  }
+
   const aiConfig = await getEffectiveAIConfig();
   if (!aiConfig) {
     return 'AI provider not configured. Go to Settings to set up your API keys.';
@@ -42,7 +47,7 @@ export async function checkQueuePrereqs(): Promise<string | null> {
  * Queue a URL for cloud transmogrification.
  *
  * @param url - The URL to transmogrify
- * @param recipeId - Recipe to apply (default: 'focus')
+ * @param recipeId - Recipe to apply (default: Fast/no inference)
  * @param customPrompt - Optional custom prompt for the 'custom' recipe
  * @param generateImages - Whether to generate AI images
  * @returns Job info with jobId
@@ -50,15 +55,16 @@ export async function checkQueuePrereqs(): Promise<string | null> {
  */
 export async function queueForCloud(
   url: string,
-  recipeId: string = 'focus',
+  recipeId: string = getDefaultRecipeId(),
   customPrompt?: string,
   generateImages: boolean = false,
 ): Promise<CloudQueueResponse> {
   const accessToken = await getAccessToken();
 
   const settings = await loadSettings();
-  const userAIConfig = buildUserAIConfig(settings);
-  if (!userAIConfig) {
+  const requiresAI = recipeRequiresAI(recipeId);
+  const userAIConfig = requiresAI ? buildUserAIConfig(settings) : null;
+  if (requiresAI && !userAIConfig) {
     throw new Error('AI keys are not configured. Set up your AI provider in Settings.');
   }
 
@@ -67,8 +73,11 @@ export async function queueForCloud(
     recipeId,
     accessToken,
     customPrompt,
-    aiConfig: userAIConfig,
   };
+
+  if (userAIConfig) {
+    body.aiConfig = userAIConfig;
+  }
 
   // Include image config if user toggled image generation
   if (generateImages) {

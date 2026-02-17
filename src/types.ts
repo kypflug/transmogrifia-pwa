@@ -10,6 +10,10 @@
 export type {
   OneDriveArticleMeta,
   OneDriveImageAsset,
+  IngestionSource,
+  FeedEntryRef,
+  FeedSyncCursor,
+  FeedSubscription,
   AIProvider,
   ImageProvider,
   AIProviderSettings,
