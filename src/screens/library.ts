@@ -311,7 +311,7 @@ export function renderLibrary(root: HTMLElement): void {
           <iframe
             id="contentFrame"
             class="content-frame"
-            sandbox="allow-same-origin"
+            sandbox="allow-same-origin allow-popups"
             title="Article content"
           ></iframe>
         </div>
@@ -622,7 +622,14 @@ async function openArticle(id: string): Promise<void> {
     }
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
     /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
-    .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
+    .io, .reveal, .cap, .cap-reveal { opacity: 1 !important; transform: none !important; }
+    /* Contain fullbleed elements within their grid cell — prevents overlap
+       when recipes nest full-viewport breakouts inside multi-column grids */
+    .fullbleed {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      width: 100% !important;
+    }
     /* Prevent author/byline blocks from floating outside reading column */
     [class*="author"], [class*="byline"], [class*="bio"],
     [class*="writer"], [class*="contributor"] {

@@ -4,9 +4,21 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.3] — 2026-02-17
+
+### Fixed
+
+- **Grid overlap on fullbleed elements** — Recipes that nest full-viewport breakout sections (`.fullbleed` with `calc(50% - 50vw)` margins) inside multi-column grid layouts caused content to overflow its grid cell and overlap the aside column. Added CSS mitigations in both the shared viewer and library reader to contain fullbleed elements within their grid cell.
+
+- **`cap-reveal` animation class not forced visible** — The `cap-reveal` class used by some recipes for figcaption fade-in animations wasn't included in the sandbox animation override, leaving captions invisible when scripts are blocked. Added to the existing `.io, .reveal, .cap` selector.
+
+---
+
 ## [1.5.2] — 2026-02-17
 
 ### Fixed
+
+- **Links unclickable in library reader** — External links inside articles were visually clickable but failed to open because the iframe sandbox was missing `allow-popups`. Added the flag to match the shared viewer iframe, which already had it.
 
 - **Mobile overflow on shared pages** — Shared viewer was missing media-clamping CSS rules that the library reader already had (`max-width: 100%` on images, tables, pre, etc.). Ported the full set from `library.ts`, eliminating horizontal scrolling on iPhone and other narrow viewports.
 
