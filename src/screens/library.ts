@@ -623,6 +623,15 @@ async function openArticle(id: string): Promise<void> {
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
     /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
     .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
+    /* Prevent author/byline blocks from floating outside reading column */
+    [class*="author"], [class*="byline"], [class*="bio"],
+    [class*="writer"], [class*="contributor"] {
+      float: none !important;
+      position: static !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      display: block !important;
+    }
     /* Image placeholder: dominant-color background with shimmer animation */
     @keyframes tmg-shimmer {
       0% { background-position: -200% 0; }

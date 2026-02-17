@@ -117,9 +117,38 @@ export async function renderSharedViewer(
       ${baseTag}
       <style>
         .remix-save-fab { display: none !important; }
-        html, body { overflow-x: hidden; max-width: 100vw; height: auto !important; }
+        html {
+          max-width: 100vw !important;
+          overflow-x: hidden !important;
+          touch-action: pan-y pinch-zoom;
+          overscroll-behavior: none;
+          height: auto !important;
+        }
+        body {
+          max-width: 100vw !important;
+          overflow: visible !important;
+          touch-action: pan-y pinch-zoom;
+          overscroll-behavior: none;
+          height: auto !important;
+        }
+        /* Clamp media elements to viewport width */
+        img, video, iframe, embed, object, table, pre, code, svg {
+          max-width: 100% !important;
+          overflow-x: auto !important;
+          box-sizing: border-box !important;
+        }
+        pre { white-space: pre-wrap !important; word-break: break-word !important; }
         /* Force JS-driven animation classes to visible state (scripts blocked by sandbox) */
         .io, .reveal, .cap { opacity: 1 !important; transform: none !important; }
+        /* Prevent author/byline blocks from floating outside reading column */
+        [class*="author"], [class*="byline"], [class*="bio"],
+        [class*="writer"], [class*="contributor"] {
+          float: none !important;
+          position: static !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+        }
       </style>
     `;
     const htmlWithOverrides = html.includes('</head>')

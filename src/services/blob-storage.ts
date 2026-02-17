@@ -265,6 +265,9 @@ export async function shareArticle(
     shareHtml = await uploadImagesToBlob(shareHtml, articleId, images, config);
   }
 
+  // 1b. Run share-time quality heuristics (telemetry only — does not block)
+  validateShareHtml(shareHtml, title);
+
   // 2. Upload article HTML to blob storage
   const resultBlobUrl = await uploadToBlob(shareHtml, articleId, config);
 
@@ -339,4 +342,48 @@ export async function resolveShareCode(
   }
 
   return response.json() as Promise<ResolvedShare>;
+}
+
+// ─── Share-time quality heuristics (telemetry only) ──────────────────────────
+
+/**
+ * Lightweight heuristic checks on HTML before sharing.
+ * Logs warnings for suspicious patterns — does NOT block the share.
+ */
+function validateShareHtml(html: string, title: string): void {
+  try {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const body = bodyMatch?.[1] ?? html;
+
+    // 1. Detect duplicate hero/source image combinations
+    //    Two or more large images in the first 500 chars of <body>
+    const headSlice = body.slice(0, 500);
+    const headImgs = headSlice.match(/<img\b[^>]*>/gi) ?? [];
+    if (headImgs.length >= 2) {
+      console.warn('[ShareQuality] Possible duplicate hero images — %d <img> in first 500 chars of body', headImgs.length);
+    }
+
+    // 2. Detect trailing recirculation image galleries
+    //    3+ consecutive <img>/<figure> elements near end of <body> whose
+    //    alt text looks like article headlines (different from current title)
+    const tailSlice = body.slice(-2000);
+    const tailImgs = [...tailSlice.matchAll(/<img\b[^>]*alt="([^"]*)"[^>]*>/gi)];
+    if (tailImgs.length >= 3) {
+      const titleWords = new Set(title.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+      let unrelatedCount = 0;
+      for (const m of tailImgs) {
+        const alt = m[1].toLowerCase();
+        const altWords = alt.split(/\s+/).filter(w => w.length > 3);
+        const overlap = altWords.filter(w => titleWords.has(w)).length;
+        if (altWords.length >= 3 && overlap === 0) {
+          unrelatedCount++;
+        }
+      }
+      if (unrelatedCount >= 3) {
+        console.warn('[ShareQuality] Possible trailing recirculation gallery — %d unrelated images near end of body', unrelatedCount);
+      }
+    }
+  } catch {
+    // Safety net — validation must never block sharing
+  }
 }

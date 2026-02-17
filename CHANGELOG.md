@@ -4,6 +4,20 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Mobile overflow on shared pages** — Shared viewer was missing media-clamping CSS rules that the library reader already had (`max-width: 100%` on images, tables, pre, etc.). Ported the full set from `library.ts`, eliminating horizontal scrolling on iPhone and other narrow viewports.
+
+- **Author bio floating outside reading column** — AI-generated CSS sometimes floated byline/author blocks, causing layout issues on desktop. Added defensive CSS guardrails in both the shared viewer and library reader to force author/byline elements to full-width block layout.
+
+### Added
+
+- **Share-time quality heuristics** — `validateShareHtml()` runs lightweight checks before publishing shared articles: warns on duplicate hero images (2+ `<img>` in first 500 chars of body) and trailing recirculation galleries (3+ unrelated images near end of body). Telemetry-only via `console.warn` — does not block sharing.
+
+---
+
 ## [1.5.1] — 2026-02-16\n\n### Fixed\n\n- **PWA signed out on every close/reopen (Windows)** — The `try-catch` added around `handleRedirectPromise()` in Fix 1/2 silently swallowed errors from stale MSAL interaction state, causing `isSignedIn()` to return false and showing the sign-in screen instead of recovering. Three changes: (1) `cleanUpStaleState()` now removes ALL MSAL temp/interaction keys (not just `interaction.status` and `request.params`), preventing recurring stale state cycles; (2) MSAL instance is always re-created after a `handleRedirectPromise` failure (not only when an account hint exists); (3) `boot()` now attempts silent auth recovery whenever an account hint exists in localStorage, not only after an IndexedDB cache restore, so Windows PWA reopens recover gracefully from transient MSAL errors.\n\n---\n\n## [1.5.0] — 2026-02-16
 
 ### Fixed
