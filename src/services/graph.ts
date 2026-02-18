@@ -19,6 +19,20 @@ const DELTA_TOKEN_LS_KEY = 'transmogrifia_delta_token';
 const INDEX_FILE = `${APP_FOLDER}/_index.json`;
 const METADATA_CONCURRENCY = 6;
 
+export class GraphHttpError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'GraphHttpError';
+    this.status = status;
+  }
+}
+
+export function isGraphGoneError(err: unknown): boolean {
+  return err instanceof GraphHttpError && (err.status === 404 || err.status === 410);
+}
+
 // ─── Delta token persistence (IndexedDB with localStorage migration) ───
 
 /**
@@ -77,6 +91,15 @@ interface ArticleIndex {
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   return { Authorization: `Bearer ${token}` };
+}
+
+function extractDeletedArticleId(item: Record<string, unknown>): string | null {
+  const name = item.name as string | undefined;
+  if (!name) return null;
+  if (name.startsWith('_')) return null;
+  if (name.endsWith('.json')) return name.replace('.json', '');
+  if (name.endsWith('.html')) return name.replace('.html', '');
+  return null;
 }
 
 /** Result of a delta sync operation */
@@ -139,20 +162,17 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
 
       // Collect phase: gather download targets and deletions
       for (const item of items) {
+        // Check if item was deleted (Graph uses both `deleted` facet and `@removed` annotation)
+        if (item.deleted || item['@removed']) {
+          const deletedId = extractDeletedArticleId(item);
+          if (deletedId) deleted.push(deletedId);
+          continue;
+        }
+
         const name = item.name as string | undefined;
         if (!name) continue;
         // Skip internal files like _index.json (Fix 4: S2)
         if (name.startsWith('_')) continue;
-
-        // Check if item was deleted (Graph uses both `deleted` facet and `@removed` annotation)
-        if (item.deleted || item['@removed']) {
-          if (name.endsWith('.json')) {
-            deleted.push(name.replace('.json', ''));
-          } else if (name.endsWith('.html')) {
-            deleted.push(name.replace('.html', ''));
-          }
-          continue;
-        }
 
         // Only process .json metadata files
         if (!name.endsWith('.json')) continue;
@@ -184,8 +204,9 @@ export async function syncArticles(): Promise<DeltaSyncResult> {
   // Download phase: fetch all metadata in parallel batches
   let hasDownloadFailures = false;
   if (toDownload.length > 0) {
-    const { metas, failureCount } = await downloadMetaBatch(toDownload, headers);
+    const { metas, failureCount, deletedDuringDownload } = await downloadMetaBatch(toDownload, headers);
     upserted.push(...metas);
+    deleted.push(...deletedDuringDownload);
     hasDownloadFailures = failureCount > 0;
   }
 
@@ -250,24 +271,24 @@ export async function bootstrapDeltaToken(
   try {
     while (url) {
       const res = await fetch(url, { headers, cache: 'no-store' });
-      if (!res.ok) return { newMetas: [], deletedIds: [] };
+      if (!res.ok) {
+        throw new GraphHttpError('Delta token bootstrap failed', res.status);
+      }
 
       const data: Record<string, unknown> = await res.json();
       const items = (data.value as Array<Record<string, unknown>>) || [];
 
       for (const item of items) {
+        if (item.deleted || item['@removed']) {
+          const deletedId = extractDeletedArticleId(item);
+          if (deletedId && knownIds.has(deletedId)) deletedIds.push(deletedId);
+          continue;
+        }
+
         const name = item.name as string | undefined;
         if (!name) continue;
         // Skip internal files like _index.json (Fix 4: S2)
         if (name.startsWith('_')) continue;
-
-        if (item.deleted || item['@removed']) {
-          if (name.endsWith('.json')) {
-            const id = name.replace('.json', '');
-            if (knownIds.has(id)) deletedIds.push(id);
-          }
-          continue;
-        }
 
         if (!name.endsWith('.json')) continue;
         const id = name.replace('.json', '');
@@ -294,8 +315,9 @@ export async function bootstrapDeltaToken(
     let newMetas: OneDriveArticleMeta[] = [];
     let hasDownloadFailures = false;
     if (toDownload.length > 0) {
-      const { metas, failureCount } = await downloadMetaBatch(toDownload, headers);
+      const { metas, failureCount, deletedDuringDownload } = await downloadMetaBatch(toDownload, headers);
       newMetas = metas;
+      deletedIds.push(...deletedDuringDownload.filter(id => knownIds.has(id)));
       hasDownloadFailures = failureCount > 0;
     }
 
@@ -313,7 +335,7 @@ export async function bootstrapDeltaToken(
     return { newMetas, deletedIds: [...new Set(deletedIds)] };
   } catch (err) {
     console.warn('Delta token bootstrap failed:', err);
-    return { newMetas: [], deletedIds: [] };
+    throw err;
   }
 }
 
@@ -367,7 +389,7 @@ async function downloadMeta(
     graphContentUrl(articleMetaPath(id)),
     { headers, cache: 'no-store' },
   );
-  if (!res.ok) throw new Error(`Download meta failed: ${res.status}`);
+  if (!res.ok) throw new GraphHttpError('Download meta failed', res.status);
   return res.json();
 }
 
@@ -377,9 +399,10 @@ async function downloadMeta(
 async function downloadMetaBatch(
   items: MetaDownloadItem[],
   headers: Record<string, string>,
-): Promise<{ metas: OneDriveArticleMeta[]; failureCount: number }> {
+): Promise<{ metas: OneDriveArticleMeta[]; failureCount: number; deletedDuringDownload: string[] }> {
   const metas: OneDriveArticleMeta[] = [];
   let failureCount = 0;
+  const deletedDuringDownload: string[] = [];
 
   for (let i = 0; i < items.length; i += METADATA_CONCURRENCY) {
     const batch = items.slice(i, i + METADATA_CONCURRENCY);
@@ -387,7 +410,7 @@ async function downloadMetaBatch(
       batch.map(async (item) => {
         if (item.directUrl) {
           const res = await fetch(item.directUrl, { cache: 'no-store' });
-          if (!res.ok) throw new Error(`Direct download failed: ${res.status}`);
+          if (!res.ok) throw new GraphHttpError('Direct metadata download failed', res.status);
           return res.json() as Promise<OneDriveArticleMeta>;
         }
         return downloadMeta(item.id, headers);
@@ -404,13 +427,17 @@ async function downloadMetaBatch(
         }
         metas.push(meta);
       } else {
-        console.warn('Metadata download failed:', result.reason);
-        failureCount++;
+        if (isGraphGoneError(result.reason)) {
+          deletedDuringDownload.push(batch[j].id);
+        } else {
+          console.warn('Metadata download failed:', result.reason);
+          failureCount++;
+        }
       }
     }
   }
 
-  return { metas, failureCount };
+  return { metas, failureCount, deletedDuringDownload: [...new Set(deletedDuringDownload)] };
 }
 
 // ─── Article index ────────────────
@@ -465,7 +492,7 @@ export async function downloadArticleHtml(id: string): Promise<string> {
     graphContentUrl(articleHtmlPath(id)),
     { headers, cache: 'no-store' },
   );
-  if (!res.ok) throw new Error(`Download HTML failed: ${res.status}`);
+  if (!res.ok) throw new GraphHttpError('Download HTML failed', res.status);
   return res.text();
 }
 

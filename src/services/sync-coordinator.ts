@@ -113,12 +113,13 @@ export function isSyncing(): boolean {
  * Request a sync. Shows cached data immediately, then syncs with OneDrive.
  * If a sync is already in progress the call is silently skipped.
  */
-export async function requestSync(): Promise<void> {
+export async function requestSync(): Promise<boolean> {
   if (syncing) {
     console.debug('[Sync] requestSync skipped — already in progress');
-    return;
+    return false;
   }
   syncing = true;
+  let syncSucceeded = false;
   emit({ type: 'sync-start' });
 
   // 1. Show cached articles instantly
@@ -176,6 +177,7 @@ export async function requestSync(): Promise<void> {
         } catch (err) {
           console.warn('[Sync] Bootstrap failed after index sync:', err);
           emit({ type: 'sync-message', message: null });
+          throw err;
         }
       } else {
         // Full re-sync
@@ -191,6 +193,10 @@ export async function requestSync(): Promise<void> {
       emit({ type: 'articles-updated', articles, cachedIds });
       rebuildIndex(articles).catch(() => {});
     }
+
+    syncSucceeded = true;
+    await setSettingsValue('lastSyncTime', Date.now());
+    postBroadcast({ type: 'sync-complete' });
   } catch (err) {
     console.warn('[Sync] Background sync failed:', err);
     emit({ type: 'sync-error', error: err as Error, hasCache: hadCache });
@@ -198,9 +204,9 @@ export async function requestSync(): Promise<void> {
     syncing = false;
     emit({ type: 'divergence', show: false });
     emit({ type: 'sync-end' });
-    postBroadcast({ type: 'sync-complete' });
-    setSettingsValue('lastSyncTime', Date.now()).catch(() => {});
   }
+
+  return syncSucceeded;
 }
 
 /**
@@ -209,7 +215,22 @@ export async function requestSync(): Promise<void> {
  */
 export async function forceFullSync(): Promise<void> {
   await clearDeltaToken();
-  return requestSync();
+  await requestSync();
+}
+
+/**
+ * Evict an article locally without performing a remote delete.
+ * Used when OneDrive reports an article as gone (404/410) during open/read.
+ */
+export async function evictArticle(articleId: string): Promise<void> {
+  const idx = articles.findIndex(a => a.id === articleId);
+  if (idx >= 0) {
+    articles.splice(idx, 1);
+  }
+  cachedIds.delete(articleId);
+  await deleteCachedArticle(articleId);
+  emit({ type: 'articles-updated', articles, cachedIds });
+  postBroadcast({ type: 'article-mutated', articleId, action: 'delete' });
 }
 
 /**

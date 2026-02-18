@@ -1,6 +1,12 @@
 import type { OneDriveArticleMeta, OneDriveImageAsset, SortOrder, FilterMode } from '../types';
 import { signOut, getUserDisplayName } from '../services/auth';
-import { downloadArticleHtml, uploadMeta, clearDeltaToken, downloadArticleAsset } from '../services/graph';
+import {
+  downloadArticleHtml,
+  uploadMeta,
+  clearDeltaToken,
+  downloadArticleAsset,
+  isGraphGoneError,
+} from '../services/graph';
 import {
   cacheHtml,
   getCachedHtml,
@@ -19,6 +25,7 @@ import {
   refreshFromCache,
   mutateArticle,
   removeArticle,
+  evictArticle,
   setArticles,
   updateCachedIds,
   subscribe as subscribeCoordinator,
@@ -654,6 +661,15 @@ async function openArticle(id: string): Promise<void> {
     } catch (err) {
       if (epoch !== openArticleEpoch) return;
       console.error('Failed to download article:', err);
+      if (isGraphGoneError(err)) {
+        await evictArticle(id);
+        currentId = null;
+        selectedPendingId = null;
+        showReaderState('error', 'This article is no longer available.');
+        showToast('Article removed — it was deleted from OneDrive');
+        void requestSync();
+        return;
+      }
       showReaderState('error', 'Failed to download article. Check your connection.');
       return;
     }
@@ -1386,8 +1402,8 @@ function setupSyncButton(): void {
   const syncBtn = document.getElementById('syncBtn');
   if (syncBtn) {
     syncBtn.addEventListener('click', async () => {
-      await requestSync();
-      showToast('Sync complete');
+      const ok = await requestSync();
+      showToast(ok ? 'Sync complete' : 'Sync failed — check your connection', ok ? 'info' : 'error');
     });
   }
 }

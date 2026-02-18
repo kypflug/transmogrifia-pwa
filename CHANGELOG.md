@@ -8,6 +8,18 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.8] — 2026-02-17
+
+### Fixed
+
+- **Stale deleted articles now self-heal on open** — When an article is deleted remotely and opening it returns Graph 404/410, the app now evicts the stale local entry (metadata + cached content), shows a clear "no longer available" message, and triggers a background resync.
+
+- **Delta metadata race now captures mid-sync deletions** — If a metadata file is deleted between delta listing and batch metadata download, 404/410 responses are now treated as deletions (not transient failures), so reconcile paths remove the article correctly.
+
+- **Sync freshness semantics tightened** — `lastSyncTime` and `sync-complete` broadcasts are now emitted only on successful sync/reconcile, preventing failed syncs from being marked as fresh and reducing long-lived stale library state.
+
+---
+
 ## [1.5.7] — 2026-02-17
 
 ### Added
