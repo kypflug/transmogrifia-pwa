@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Article-list origin metadata** — Sidebar list items now show the source hostname before recipe and relative age, matching the reader header-style metadata pattern (`origin.com · Reader · 1d ago`).
+
 ---
 
 ## [1.5.10] — 2026-02-18

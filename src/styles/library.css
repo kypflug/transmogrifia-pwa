@@ -359,38 +359,64 @@
   gap: 8px;
   margin-top: 3px;
   padding-left: 20px;
+  min-width: 0;
+}
+
+.article-item-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.article-item-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.article-origin {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--edge-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-item-sep {
+  font-size: 11px;
+  color: var(--edge-text-tertiary);
+  flex-shrink: 0;
 }
 
 .article-recipe {
   font-size: 11px;
   color: var(--edge-text-secondary);
+  flex-shrink: 0;
 }
 
 .article-date {
   font-size: 11px;
   color: var(--edge-text-tertiary);
+  white-space: nowrap;
 }
 
 .cloud-badge {
   font-size: 12px;
-  margin-left: auto;
 }
 
 .blocked-badge {
   font-size: 12px;
   color: var(--edge-red);
-  margin-left: auto;
 }
 
 .shared-badge {
   font-size: 12px;
-  margin-left: auto;
-}
-
-.blocked-badge + .cloud-badge,
-.blocked-badge + .shared-badge,
-.cloud-badge + .shared-badge {
-  margin-left: 0;
 }
 
 /* ===== Pending Job Items ===== */

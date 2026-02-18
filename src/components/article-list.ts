@@ -33,6 +33,7 @@ export function renderArticleItem(
 ): string {
   const recipe = getRecipe(meta.recipeId);
   const icon = recipe?.icon ?? '📄';
+  const hostname = getHostname(meta.originalUrl);
   const recipeName = recipe?.name ?? meta.recipeName ?? 'Article';
   const star = meta.isFavorite ? '<span class="fav-star active">★</span>' : '<span class="fav-star">★</span>';
   const blockedBadge = meta.rssFallbackReason === 'source-fetch-blocked-401-403'
@@ -49,9 +50,16 @@ export function renderArticleItem(
         <span class="article-title">${escapeHtml(meta.title)}</span>
       </div>
       <div class="article-item-bottom">
-        <span class="article-recipe">${icon} ${escapeHtml(recipeName)}</span>
-        <span class="article-date">${relativeDate(meta.createdAt)}</span>
-        ${blockedBadge}${cloudBadge}${sharedBadge}
+        <div class="article-item-meta-left">
+          <span class="article-origin" title="${escapeHtml(hostname)}">${escapeHtml(hostname)}</span>
+          <span class="article-item-sep">·</span>
+          <span class="article-recipe">${icon} ${escapeHtml(recipeName)}</span>
+          <span class="article-item-sep">·</span>
+          <span class="article-date">${relativeDate(meta.createdAt)}</span>
+        </div>
+        <div class="article-item-meta-right">
+          ${blockedBadge}${cloudBadge}${sharedBadge}
+        </div>
       </div>
     </div>
   `;
@@ -117,6 +125,14 @@ export function renderArticleList(
   container.innerHTML = pendingHtml + articles
     .map(a => renderArticleItem(a, cachedIds.has(a.id), a.id === activeId))
     .join('');
+}
+
+function getHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 function escapeHtml(text: string): string {
