@@ -9,7 +9,7 @@ export interface RecipeInfo {
 }
 
 export const RECIPES: RecipeInfo[] = [
-  { id: 'fast-no-inference', name: 'Fast', icon: '⚡', requiresAI: false },
+  { id: 'fast', name: 'Fast', icon: '⚡', requiresAI: true },
   { id: 'focus',       name: 'Focus',       icon: '🎯', legacy: true },
   { id: 'reader',      name: 'Reader',      icon: '📖', requiresAI: true },
   { id: 'aesthetic',   name: 'Aesthetic',   icon: '🎨', requiresAI: true },
@@ -24,12 +24,13 @@ export const RECIPES: RecipeInfo[] = [
 export const PICKER_RECIPES: RecipeInfo[] = RECIPES.filter(r => !r.legacy);
 
 export function getRecipe(id: string): RecipeInfo | undefined {
-  return RECIPES.find(r => r.id === id);
+  const normalized = id === 'fast-no-inference' ? 'fast' : id;
+  return RECIPES.find(r => r.id === normalized);
 }
 
 export function getDefaultRecipeId(): string {
-  return PICKER_RECIPES.some(recipe => recipe.id === 'fast-no-inference')
-    ? 'fast-no-inference'
+  return PICKER_RECIPES.some(recipe => recipe.id === 'fast')
+    ? 'fast'
     : 'reader';
 }
 

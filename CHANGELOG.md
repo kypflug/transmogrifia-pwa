@@ -8,6 +8,16 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.9] — 2026-02-17
+
+### Changed
+
+- **Hybrid fast recipe** — Fast recipe now uses cloud AI for content extraction/deduplication/detritus removal (`ai-extract` render mode). Recipe ID changed from `fast-no-inference` to `fast`; backward compatibility alias preserved in `getRecipe()`.
+
+- **Core 0.1.27** — Updated `@kypflug/transmogrifier-core` for `ai-extract` render mode and renamed fast recipe.
+
+---
+
 ## [1.5.8] — 2026-02-17
 
 ### Fixed

@@ -47,7 +47,7 @@ export async function checkQueuePrereqs(recipeId: string = getDefaultRecipeId())
  * Queue a URL for cloud transmogrification.
  *
  * @param url - The URL to transmogrify
- * @param recipeId - Recipe to apply (default: Fast/no inference)
+ * @param recipeId - Recipe to apply (default: Fast)
  * @param customPrompt - Optional custom prompt for the 'custom' recipe
  * @param generateImages - Whether to generate AI images
  * @returns Job info with jobId
