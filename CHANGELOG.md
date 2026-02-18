@@ -8,6 +8,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.10] — 2026-02-18
+
+### Fixed
+
+- **Draggable startup loading/error in WCO mode** — Added a dedicated Window Controls Overlay drag strip for both boot loading and boot error screens so the installed desktop PWA window can be moved while auth recovery is in progress.
+
+---
+
 ## [1.5.9] — 2026-02-17
 
 ### Changed

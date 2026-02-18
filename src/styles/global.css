@@ -110,10 +110,20 @@ body {
 /* ===== Boot Loading ===== */
 .boot-loading {
   display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--edge-surface);
+}
+
+.boot-titlebar {
+  display: none;
+}
+
+.boot-loading-content {
+  display: flex;
   align-items: center;
   justify-content: center;
-  height: 100dvh;
-  background: var(--edge-surface);
+  flex: 1;
 }
 
 /* ===== Spinner ===== */
@@ -187,9 +197,16 @@ body.is-offline .offline-banner {
 .boot-error-screen {
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
+  background: var(--edge-surface);
+}
+
+.boot-error-content {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  flex: 1;
   padding: 2rem;
   text-align: center;
   gap: 1rem;
@@ -404,6 +421,19 @@ body.is-offline .offline-banner {
 
 /* ===== Window Controls Overlay ===== */
 @media (display-mode: window-controls-overlay) {
+  .boot-titlebar {
+    display: block;
+    min-height: env(titlebar-area-height, 32px);
+    background: var(--edge-surface-raised);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .boot-error-reload {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
   /* Sidebar header: match titlebar height, leave room for controls on right */
   .sidebar-header {
     padding-top: calc(env(titlebar-area-y, 0px) + 8px);

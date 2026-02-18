@@ -67,9 +67,12 @@ boot(app).catch(err => {
     // Sanitize error messages before inserting into HTML
     app.innerHTML = `
       <div class="boot-error-screen">
-        <p class="boot-error-title">⚠️ ${escapeHtml(errorMessage)}</p>
-        ${errorDetails ? `<p class="boot-error-details">${escapeHtml(errorDetails)}</p>` : ''}
-        <button class="boot-error-reload" id="bootErrorReload">Reload</button>
+        <div class="boot-titlebar" aria-hidden="true"></div>
+        <div class="boot-error-content">
+          <p class="boot-error-title">⚠️ ${escapeHtml(errorMessage)}</p>
+          ${errorDetails ? `<p class="boot-error-details">${escapeHtml(errorDetails)}</p>` : ''}
+          <button class="boot-error-reload" id="bootErrorReload">Reload</button>
+        </div>
       </div>
     `;
 
