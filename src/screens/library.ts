@@ -1494,7 +1494,7 @@ function setupAddUrl(): void {
   });
 }
 
-export function showAddUrlModal(prefillUrl?: string): void {
+export function showAddUrlModal(prefillUrl?: string, onClose?: () => void): void {
   // Remove existing modal if any
   document.getElementById('addUrlModal')?.remove();
 
@@ -1559,7 +1559,7 @@ export function showAddUrlModal(prefillUrl?: string): void {
   });
 
   // Close handlers
-  const close = () => overlay.remove();
+  const close = () => { overlay.remove(); onClose?.(); };
   document.getElementById('addUrlClose')!.addEventListener('click', close);
   document.getElementById('addUrlCancel')!.addEventListener('click', close);
   overlay.addEventListener('click', (e) => {

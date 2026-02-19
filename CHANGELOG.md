@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Share target modal destroyed by SW reload** — Defers service worker auto-update while the Add URL modal is open during a share_target flow, preventing the page from reloading and losing the shared URL.
+
 ---
 
 ## [1.5.11] — 2026-02-19

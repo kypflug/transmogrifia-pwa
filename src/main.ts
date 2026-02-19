@@ -21,14 +21,15 @@ const app = document.getElementById('app')!;
  * (initAuth) completes to avoid interrupting auth redirects.
  */
 let pendingSwUpdate: (() => Promise<void>) | null = null;
+let deferSwUpdate = false;
 const updateSW = registerSW({
   onNeedRefresh() {
-    if (authBootComplete) {
-      // Auth already done — safe to activate immediately
-      updateSW().catch(() => {});
-    } else {
-      // Auth still in progress — defer until boot finishes
+    if (!authBootComplete || deferSwUpdate) {
+      // Auth still in progress or share-target modal open — defer
       pendingSwUpdate = updateSW;
+    } else {
+      // Safe to activate immediately
+      updateSW().catch(() => {});
     }
   },
   onOfflineReady() {
@@ -287,13 +288,21 @@ function handleShareTarget(): void {
 
   if (!sharedUrl) return;
 
+  // Defer SW auto-update while the share modal is open to prevent reload
+  deferSwUpdate = true;
+
   // Wait a tick for the library to finish rendering, then open the modal
   requestAnimationFrame(async () => {
     const error = await checkQueuePrereqs();
     if (error) {
       showToast(error, 'error');
+      deferSwUpdate = false;
+      if (pendingSwUpdate) { pendingSwUpdate().catch(() => {}); pendingSwUpdate = null; }
       return;
     }
-    showAddUrlModal(sharedUrl);
+    showAddUrlModal(sharedUrl, () => {
+      deferSwUpdate = false;
+      if (pendingSwUpdate) { pendingSwUpdate().catch(() => {}); pendingSwUpdate = null; }
+    });
   });
 }
