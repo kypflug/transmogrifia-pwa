@@ -6,6 +6,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+---
+
+## [1.5.11] — 2026-02-19
+
+### Fixed
+
+- **Resize handle lost during drag** — Sidebar resize handle would stop tracking the mouse when an article was loaded because the iframe captured mouse events. Now disables `pointer-events` on the iframe during resize drag.
+
 ### Changed
 
 - **Article-list origin metadata** — Sidebar list items now show the source hostname before recipe and relative age, matching the reader header-style metadata pattern (`origin.com · Reader · 1d ago`).

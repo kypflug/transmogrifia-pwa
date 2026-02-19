@@ -1311,6 +1311,10 @@ function setupResizeHandle(): void {
     startX = e.clientX;
     startWidth = sidebar.offsetWidth;
 
+    // Prevent the article iframe from capturing mouse events during drag
+    const frame = document.getElementById('contentFrame') as HTMLIFrameElement | null;
+    if (frame) frame.style.pointerEvents = 'none';
+
     const onMouseMove = (e: MouseEvent) => {
       const newWidth = Math.max(260, Math.min(600, startWidth + e.clientX - startX));
       sidebar.style.width = `${newWidth}px`;
@@ -1319,6 +1323,7 @@ function setupResizeHandle(): void {
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      if (frame) frame.style.pointerEvents = '';
       setSidebarWidth(sidebar.offsetWidth);
     };
 
