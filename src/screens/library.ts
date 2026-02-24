@@ -410,7 +410,7 @@ export function renderLibrary(root: HTMLElement): void {
           <iframe
             id="contentFrame"
             class="content-frame"
-            sandbox="allow-same-origin allow-popups"
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             title="Article content"
           ></iframe>
         </div>

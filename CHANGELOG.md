@@ -6,9 +6,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+---
+
+## [1.5.12] — 2026-02-24
+
 ### Fixed
 
 - **Share target modal destroyed by SW reload** — Defers service worker auto-update while the Add URL modal is open during a share_target flow, preventing the page from reloading and losing the shared URL.
+- **PDF and external links blocked in article reader** — Links opened from sandboxed article iframes (library reader and shared viewer) inherited sandbox restrictions, preventing PDFs and other cross-origin resources from loading. Added `allow-popups-to-escape-sandbox` so new-tab links work normally.
 
 ---
 

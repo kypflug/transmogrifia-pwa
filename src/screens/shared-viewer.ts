@@ -158,7 +158,7 @@ export async function renderSharedViewer(
       <iframe
         id="sharedFrame"
         class="shared-viewer-frame"
-        sandbox="allow-same-origin allow-popups"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         style="display:none"
       ></iframe>
     </div>
