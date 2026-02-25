@@ -248,24 +248,32 @@ export async function renderSharedViewer(
       ? html.replace('</head>', `${styleOverride}</head>`)
       : styleOverride + html;
 
-    frame.srcdoc = htmlWithOverrides;
-    frame.addEventListener('load', () => {
+    frame.onload = () => {
       if (loading) loading.style.display = 'none';
       frame.style.display = 'block';
       const progress = document.getElementById('sharedProgress');
       if (progress) progress.classList.remove('hidden');
       attachProgressTracking(frame);
 
-      // Fix links to open in new tab
-      const doc = frame.contentDocument;
-      if (doc) {
+      // Retry until the contentDocument body has children (iOS Safari
+      // can replace the document after load)
+      let attempts = 0;
+      function trySetup() {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.body || !doc.body.childElementCount) {
+          if (++attempts < 10) { requestAnimationFrame(trySetup); }
+          return;
+        }
+        // Fix links to open in new tab
         doc.querySelectorAll('a[href]').forEach(a => {
           (a as HTMLAnchorElement).target = '_blank';
           (a as HTMLAnchorElement).rel = 'noopener';
         });
         attachLightbox(frame);
       }
-    });
+      trySetup();
+    };
+    frame.srcdoc = htmlWithOverrides;
 
     // Update the chrome bar with title and original URL globe button
     const chrome = container.querySelector('.shared-viewer-chrome');
