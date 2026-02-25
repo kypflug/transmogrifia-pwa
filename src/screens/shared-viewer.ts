@@ -272,7 +272,7 @@ export async function renderSharedViewer(
         });
         attachLightbox(frame);
       }
-      trySetup();
+      requestAnimationFrame(trySetup);
     };
     frame.srcdoc = htmlWithOverrides;
 
