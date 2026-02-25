@@ -47,6 +47,7 @@ import { checkQueuePrereqs, queueForCloud } from '../services/cloud-queue';
 import { escapeHtml } from '../utils/storage';
 import { initBackSwipe, initOverscrollNav, destroyGestures } from '../gestures';
 import { shareArticle, unshareArticle } from '../services/blob-storage';
+import { attachLightbox } from '@kypflug/transmogrifier-core';
 import { getEffectiveSharingConfig, tryAutoImportFromCloud } from '../services/settings';
 import { onBroadcast, postBroadcast } from '../services/broadcast';
 
@@ -800,6 +801,7 @@ async function openArticle(id: string): Promise<void> {
 
       fixAnchorLinks(frame);
       fixScrollBlocking(frame);
+      attachLightbox(frame);
       attachReaderProgressTracking(frame);
 
       // Resolve OneDrive image assets lazily (text is already visible).
@@ -967,6 +969,14 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       ? `<p class="share-expires">Expires ${new Date(meta.shareExpiresAt).toLocaleDateString()}</p>`
       : '';
 
+    const summaryBlock = meta.summary
+      ? `<div class="share-summary-section">
+           <label>Share with summary:</label>
+           <textarea class="share-summary-text" id="shareSummaryText" readonly>${escapeHtml(meta.title)}\n\n${escapeHtml(meta.summary)}\n\n${escapeHtml(meta.sharedUrl)}</textarea>
+           <button class="settings-btn settings-btn-secondary" id="shareCopySummaryBtn">📋 Copy with summary</button>
+         </div>`
+      : '';
+
     overlay.innerHTML = `
       <div class="modal-dialog modal-sm">
         <div class="modal-header">
@@ -980,6 +990,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
             <button class="settings-btn settings-btn-secondary share-copy-inline" id="shareCopyInline" title="Copy to clipboard">📋</button>
           </div>
           ${expiresInfo}
+          ${summaryBlock}
         </div>
         <div class="modal-footer">
           <button class="settings-btn settings-btn-danger" id="shareUnshareBtn">Unshare</button>
@@ -1009,6 +1020,17 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       showToast('Share link copied!');
       close();
     });
+
+    // Copy with summary button
+    const copySummaryBtn = document.getElementById('shareCopySummaryBtn');
+    if (copySummaryBtn) {
+      copySummaryBtn.addEventListener('click', async () => {
+        const text = (document.getElementById('shareSummaryText') as HTMLTextAreaElement).value;
+        await navigator.clipboard.writeText(text);
+        copySummaryBtn.textContent = '✓ Copied!';
+        setTimeout(() => { copySummaryBtn.textContent = '📋 Copy with summary'; }, 2000);
+      });
+    }
 
     // Unshare button
     document.getElementById('shareUnshareBtn')!.addEventListener('click', async () => {
@@ -1108,7 +1130,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
       const expiresAt = expirationDays > 0 ? Date.now() + expirationDays * 24 * 60 * 60 * 1000 : undefined;
 
       try {
-        const result = await shareArticle(meta.id, html, meta.title, meta.originalUrl, expiresAt, meta.images);
+        const result = await shareArticle(meta.id, html, meta.title, meta.originalUrl, expiresAt, meta.images, { summary: meta.summary });
 
         // Update meta
         meta.sharedUrl = result.shareUrl;
@@ -1122,6 +1144,14 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
         updateShareButton(meta);
 
         // Transform dialog to show the URL with copy button
+        const postShareSummaryBlock = meta.summary
+          ? `<div class="share-summary-section">
+               <label>Share with summary:</label>
+               <textarea class="share-summary-text" id="shareSummaryText" readonly>${escapeHtml(meta.title)}\n\n${escapeHtml(meta.summary)}\n\n${escapeHtml(result.shareUrl)}</textarea>
+               <button class="settings-btn settings-btn-secondary" id="shareCopySummaryBtn">📋 Copy with summary</button>
+             </div>`
+          : '';
+
         const body = document.getElementById('shareModal')!.querySelector('.modal-body')!;
         body.innerHTML = `
           <p>Article shared successfully!</p>
@@ -1129,6 +1159,7 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
             <input type="text" class="share-url-input" id="shareUrlDisplay" value="${escapeHtml(result.shareUrl)}" readonly>
             <button class="settings-btn settings-btn-secondary share-copy-inline" id="shareCopyInline" title="Copy to clipboard">📋</button>
           </div>
+          ${postShareSummaryBlock}
         `;
 
         // Update header
@@ -1149,6 +1180,17 @@ function handleShareClick(meta: OneDriveArticleMeta): void {
             setTimeout(() => { btn.textContent = '📋'; }, 2000);
           });
         });
+
+        // Copy with summary (post-share)
+        const postCopySummaryBtn = document.getElementById('shareCopySummaryBtn');
+        if (postCopySummaryBtn) {
+          postCopySummaryBtn.addEventListener('click', async () => {
+            const text = (document.getElementById('shareSummaryText') as HTMLTextAreaElement).value;
+            await navigator.clipboard.writeText(text);
+            postCopySummaryBtn.textContent = '✓ Copied!';
+            setTimeout(() => { postCopySummaryBtn.textContent = '📋 Copy with summary'; }, 2000);
+          });
+        }
 
         // Copy & close
         document.getElementById('shareCopyCloseBtn')!.addEventListener('click', async () => {

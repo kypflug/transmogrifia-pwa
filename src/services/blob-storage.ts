@@ -24,6 +24,8 @@ import {
   imageBlobUrl,
   deleteImageBlobs,
   rewriteTmgAssetUrls,
+  injectOGTags,
+  injectLightbox,
 } from '@kypflug/transmogrifier-core';
 
 export type { AzureBlobConfig, ShareResult } from '@kypflug/transmogrifier-core';
@@ -246,6 +248,7 @@ export async function shareArticle(
   originalUrl: string,
   expiresAt?: number,
   images?: OneDriveImageAsset[],
+  meta?: { summary?: string },
 ): Promise<ShareResult> {
   const config = await getEffectiveSharingConfig();
   if (!config) {
@@ -268,11 +271,20 @@ export async function shareArticle(
   // 1b. Run share-time quality heuristics (telemetry only — does not block)
   validateShareHtml(shareHtml, title);
 
+  // 1c. Inject OG tags for social media crawlers (use summary if available)
+  const shareUrlPlaceholder = 'https://transmogrifia.app/shared/';
+  shareHtml = injectOGTags(shareHtml, title, shareUrlPlaceholder, meta?.summary);
+
+  // 1d. Inject lightbox for image enlargement
+  shareHtml = injectLightbox(shareHtml);
+
   // 2. Upload article HTML to blob storage
   const resultBlobUrl = await uploadToBlob(shareHtml, articleId, config);
 
   // 3. Extract metadata for social media preview cards
+  //    Prefer AI summary over heuristic extraction when available
   const shareMeta = extractShareMeta(shareHtml);
+  const description = meta?.summary || shareMeta.description;
 
   // 4. Register short link with metadata
   const { shortCode, shareUrl } = await registerShortLink(
@@ -280,7 +292,7 @@ export async function shareArticle(
     title,
     accessToken,
     cloudUrl,
-    { description: shareMeta.description, originalUrl, image: shareMeta.image },
+    { description, originalUrl, image: shareMeta.image },
     expiresAt,
   );
 

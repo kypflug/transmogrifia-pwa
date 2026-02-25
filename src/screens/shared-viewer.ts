@@ -10,6 +10,7 @@
 
 import { resolveShareCode } from '../services/blob-storage';
 import type { ResolvedShare } from '../services/blob-storage';
+import { attachLightbox } from '@kypflug/transmogrifier-core';
 
 /** Inject / update OG meta tags in the host document head. */
 function setDocumentMeta(title: string, description?: string, image?: string, url?: string): void {
@@ -262,6 +263,7 @@ export async function renderSharedViewer(
           (a as HTMLAnchorElement).target = '_blank';
           (a as HTMLAnchorElement).rel = 'noopener';
         });
+        attachLightbox(frame);
       }
     });
 

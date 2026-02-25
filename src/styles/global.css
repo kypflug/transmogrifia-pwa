@@ -377,6 +377,39 @@ body.is-offline .offline-banner {
   color: var(--edge-text-secondary);
 }
 
+.share-summary-section {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-summary-section label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--edge-text-secondary);
+}
+
+.share-summary-text {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+  border: 1px solid var(--edge-border);
+  border-radius: var(--edge-radius);
+  background: var(--edge-surface-sunken);
+  color: var(--edge-text-primary);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.share-summary-text:focus {
+  outline: none;
+  border-color: var(--edge-accent, #0078d4);
+}
+
 .settings-btn-danger {
   background: #d13438;
   color: #fff;

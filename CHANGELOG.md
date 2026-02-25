@@ -8,6 +8,20 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.13] — 2026-02-25
+
+### Added
+
+- **Share with summary** — Share dialog now includes a "Copy with summary" option that copies Title + Summary + URL to the clipboard. AI-generated summaries are produced during remix and stored in article metadata. Available in both the "already shared" and post-share dialog states.
+- **Lightbox image viewer** — Tap any image in the article reader or shared viewer to enlarge it in a full-viewport overlay. Dismiss by clicking/tapping or pressing Escape. Shared article pages also include an embedded lightbox.
+- **Social meta tags on shared articles** — Shared HTML now includes Open Graph `description` and `image` tags for richer social media preview cards, preferring the AI summary over heuristic extraction.
+
+### Changed
+
+- **Core 0.1.33** — Updated `@kypflug/transmogrifier-core` for summary fields, `injectOGTags` description parameter, `injectLightbox`, and `attachLightbox`.
+
+---
+
 ## [1.5.12] — 2026-02-24
 
 ### Fixed
