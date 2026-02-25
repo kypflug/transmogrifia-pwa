@@ -183,8 +183,9 @@ export async function renderSharedViewer(
 
     // 3. Render in sandboxed iframe
     const loading = document.getElementById('sharedLoading');
-    const frame = document.getElementById('sharedFrame') as HTMLIFrameElement | null;
-    if (!frame) return;
+    const frameEl = document.getElementById('sharedFrame') as HTMLIFrameElement | null;
+    if (!frameEl) return;
+    const frame = frameEl; // const binding narrows to non-null for closures
 
     // Inject <base> so relative URLs (images, links) resolve against the
     // original article's site, not the PWA's origin.
