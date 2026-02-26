@@ -18,6 +18,7 @@ import {
   getCachedImageColors,
   cacheImageColor,
   getSettingsValue,
+  setSettingsValue,
 } from '../services/cache';
 import {
   requestSync,
@@ -471,6 +472,9 @@ async function initLibrary(): Promise<void> {
 
   // Load articles
   await requestSync();
+
+  // Restore pending cloud jobs that survived a page reload (e.g. share target)
+  await restorePendingJobs();
 }
 
 function setSelectValues(): void {
@@ -1777,6 +1781,61 @@ function fixScrollBlocking(frame: HTMLIFrameElement): void {
 
 // ─── Pending Job Tracking ──────────────────────────────
 
+const PENDING_JOBS_KEY = 'pendingJobs';
+const PENDING_MAX_AGE = 10 * 60 * 1000; // 10 minutes
+
+/** Serializable subset of PendingJob (excludes pollTimer). */
+interface PendingJobRecord {
+  jobId: string;
+  url: string;
+  recipeId: string;
+  title: string;
+  startTime: number;
+}
+
+/** Persist current pending jobs to IndexedDB so they survive page reloads. */
+function savePendingJobs(): void {
+  const records: PendingJobRecord[] = pendingJobs.map(j => ({
+    jobId: j.jobId,
+    url: j.url,
+    recipeId: j.recipeId,
+    title: j.title,
+    startTime: j.startTime,
+  }));
+  setSettingsValue(PENDING_JOBS_KEY, records).catch(() => {});
+}
+
+/**
+ * Restore pending jobs from IndexedDB after a page reload.
+ * Prunes expired entries (>10 min old) and restarts polling for survivors.
+ */
+async function restorePendingJobs(): Promise<void> {
+  let records: PendingJobRecord[] | null = null;
+  try {
+    records = await getSettingsValue<PendingJobRecord[]>(PENDING_JOBS_KEY);
+  } catch { return; }
+  if (!records || records.length === 0) return;
+
+  const now = Date.now();
+  const alive = records.filter(r => now - r.startTime < PENDING_MAX_AGE);
+
+  // Deduplicate against any jobs already in memory (e.g. just added via share target)
+  for (const r of alive) {
+    if (pendingJobs.find(j => j.jobId === r.jobId)) continue;
+    const job: PendingJob = { ...r };
+    pendingJobs.push(job);
+    startPendingPoll(job);
+  }
+
+  if (pendingJobs.length > 0) {
+    renderList();
+    ensurePendingTick();
+  }
+
+  // Write back pruned list
+  savePendingJobs();
+}
+
 /** Interval that re-renders pending items to update elapsed time */
 let pendingTickTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -1790,31 +1849,36 @@ function addPendingJob(jobId: string, url: string, recipeId: string, title: stri
   };
 
   pendingJobs.push(job);
+  savePendingJobs();
   renderList();
 
   // Start polling for the new article — cloud jobs typically take 20-60s
   startPendingPoll(job);
 
   // Start the elapsed-time tick if not already running
-  if (!pendingTickTimer) {
-    pendingTickTimer = setInterval(() => {
-      if (pendingJobs.length === 0) {
-        clearInterval(pendingTickTimer!);
-        pendingTickTimer = null;
-        return;
+  ensurePendingTick();
+}
+
+/** Start the 5-second tick timer that updates elapsed time for pending items. */
+function ensurePendingTick(): void {
+  if (pendingTickTimer) return;
+  pendingTickTimer = setInterval(() => {
+    if (pendingJobs.length === 0) {
+      clearInterval(pendingTickTimer!);
+      pendingTickTimer = null;
+      return;
+    }
+    renderList();
+    // Update progress pane elapsed time if a pending item is selected
+    if (selectedPendingId) {
+      const job = pendingJobs.find(j => j.jobId === selectedPendingId);
+      if (job) {
+        const elapsed = Math.round((Date.now() - job.startTime) / 1000);
+        const el = document.getElementById('progressElapsed');
+        if (el) el.textContent = elapsed > 0 ? `${elapsed}s elapsed` : '';
       }
-      renderList();
-      // Update progress pane elapsed time if a pending item is selected
-      if (selectedPendingId) {
-        const job = pendingJobs.find(j => j.jobId === selectedPendingId);
-        if (job) {
-          const elapsed = Math.round((Date.now() - job.startTime) / 1000);
-          const el = document.getElementById('progressElapsed');
-          if (el) el.textContent = elapsed > 0 ? `${elapsed}s elapsed` : '';
-        }
-      }
-    }, 5_000);
-  }
+    }
+  }, 5_000);
 }
 
 /**
@@ -1874,6 +1938,7 @@ function removePendingJob(jobId: string): void {
   const job = pendingJobs.find(j => j.jobId === jobId);
   if (job?.pollTimer) clearTimeout(job.pollTimer);
   pendingJobs = pendingJobs.filter(j => j.jobId !== jobId);
+  savePendingJobs();
   if (selectedPendingId === jobId) {
     selectedPendingId = null;
   }

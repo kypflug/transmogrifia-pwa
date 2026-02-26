@@ -6,6 +6,10 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pending jobs survive page reloads** — Cloud generation jobs (pending remixes) are now persisted to IndexedDB so they are not lost when the PWA reloads, e.g. when a new URL is shared via the OS share sheet. Previously, sharing a new URL would clear all other in-progress generations from the queue.
+
 ---
 
 ## [1.5.13] — 2026-02-25
