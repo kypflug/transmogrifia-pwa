@@ -342,7 +342,7 @@ export async function resolveShareCode(
   code: string,
   cloudUrl?: string,
 ): Promise<ResolvedShare> {
-  const baseUrl = cloudUrl || 'https://transmogrifier-api.azurewebsites.net';
+  const baseUrl = cloudUrl || (import.meta.env.DEV ? '' : 'https://transmogrifier-api.azurewebsites.net');
 
   const response = await fetch(`${baseUrl}/api/s/${code}`);
 

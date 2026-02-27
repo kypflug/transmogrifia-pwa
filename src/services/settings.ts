@@ -290,8 +290,8 @@ export async function getEffectiveImageConfig(): Promise<{
   return getImageProviderConfig(settings, provider);
 }
 
-/** Default cloud API URL (Azure Functions) */
-const DEFAULT_CLOUD_URL = 'https://transmogrifier-api.azurewebsites.net';
+/** Default cloud API URL — relative in dev mode for Vite proxy, absolute in production */
+const DEFAULT_CLOUD_URL = import.meta.env.DEV ? '' : 'https://transmogrifier-api.azurewebsites.net';
 
 /**
  * Resolve the effective cloud API URL.

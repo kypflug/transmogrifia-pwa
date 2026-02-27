@@ -95,7 +95,7 @@ export default defineConfig({
   server: {
     proxy: {
       // Proxy cloud API requests to avoid CORS issues during local development
-      '/api/queue': {
+      '/api': {
         target: 'https://transmogrifier-api.azurewebsites.net',
         changeOrigin: true,
         secure: true,
