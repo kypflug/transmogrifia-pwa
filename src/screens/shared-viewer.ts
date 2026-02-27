@@ -271,9 +271,18 @@ export async function renderSharedViewer(
             const href = a.getAttribute('href');
             if (!href || href === '#') return;
             e.preventDefault();
-            const target = doc.getElementById(href.slice(1));
+            const fragment = href.slice(1);
+            let decoded: string;
+            try { decoded = decodeURIComponent(fragment); } catch { decoded = fragment; }
+            const target = doc.getElementById(fragment)
+              || doc.getElementById(decoded)
+              || doc.querySelector(`[name="${CSS.escape(fragment)}"]`)
+              || doc.querySelector(`[name="${CSS.escape(decoded)}"]`);
             if (target) {
-              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              const win = doc.defaultView;
+              if (win) {
+                win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
+              }
             }
           });
         });

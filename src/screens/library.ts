@@ -1696,6 +1696,24 @@ function formatRelativeTime(timestamp: number): string {
   return `${days}d ago`;
 }
 
+/** Resolve an anchor fragment to the target element in `doc`. */
+function resolveAnchorTarget(doc: Document, fragment: string): Element | null {
+  let decoded: string;
+  try { decoded = decodeURIComponent(fragment); } catch { decoded = fragment; }
+  return doc.getElementById(fragment)
+    || doc.getElementById(decoded)
+    || doc.querySelector(`[name="${CSS.escape(fragment)}"]`)
+    || doc.querySelector(`[name="${CSS.escape(decoded)}"]`);
+}
+
+/** Scroll the iframe viewport so `target` is at the top. */
+function scrollIframeToTarget(doc: Document, target: Element): void {
+  const win = doc.defaultView;
+  if (win) {
+    win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
+  }
+}
+
 function fixAnchorLinks(frame: HTMLIFrameElement): void {
   try {
     const doc = frame.contentDocument;
@@ -1707,9 +1725,9 @@ function fixAnchorLinks(frame: HTMLIFrameElement): void {
         // Always prevent default — the <base> tag would otherwise navigate
         // the iframe to the original article URL instead of scrolling.
         e.preventDefault();
-        const target = doc.getElementById(href.slice(1));
+        const target = resolveAnchorTarget(doc, href.slice(1));
         if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          scrollIframeToTarget(doc, target);
         }
       });
     });

@@ -8,7 +8,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ### Fixed
 
-- **Anchor links broken in reader and shared viewer** — In-page `#fragment` links inside articles now scroll to the target element instead of silently failing. The `<base>` tag (used to resolve relative URLs against the original article's domain) was causing anchor clicks to attempt cross-origin navigation, which the iframe sandbox blocked. The shared viewer additionally set `target="_blank"` on all links including anchors, opening them in a new tab instead of scrolling.
+- **Anchor links broken in reader and shared viewer** — In-page `#fragment` links inside articles now scroll to the target element instead of silently failing. Replaced `scrollIntoView()` (unreliable inside sandboxed `srcdoc` iframes) with explicit `window.scrollTo()` on the iframe's viewport. Also: the `<base>` tag was causing unhandled anchor clicks to attempt cross-origin navigation; the shared viewer was setting `target="_blank"` on all links including anchors. Target lookup now handles URL-encoded fragments and `name` attributes.
 
 ---
 
