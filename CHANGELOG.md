@@ -4,6 +4,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Completed cloud jobs no longer persist after page reload** — Fixed pending job completion detection so it checks whether the article already exists in the library, not just whether the article count increased. Also prunes already-completed jobs immediately on restore. Previously, completed jobs would remain in the pending list until the 10-minute timeout after a page reload.
+
+---
+
 ## [1.5.14] — 2026-02-27
 
 ### Fixed

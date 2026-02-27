@@ -1824,7 +1824,20 @@ async function restorePendingJobs(): Promise<void> {
     if (pendingJobs.find(j => j.jobId === r.jobId)) continue;
     const job: PendingJob = { ...r };
     pendingJobs.push(job);
-    startPendingPoll(job);
+  }
+
+  // Prune jobs whose articles already appeared (e.g. completed before the reload)
+  const alreadyComplete = pendingJobs.filter(j =>
+    articles.find(a => a.originalUrl === j.url && a.createdAt > j.startTime - 5000),
+  );
+  for (const j of alreadyComplete) {
+    if (j.pollTimer) clearTimeout(j.pollTimer);
+  }
+  pendingJobs = pendingJobs.filter(j => !alreadyComplete.includes(j));
+
+  // Start polling for surviving jobs
+  for (const j of pendingJobs) {
+    if (!j.pollTimer) startPendingPoll(j);
   }
 
   if (pendingJobs.length > 0) {
@@ -1908,20 +1921,17 @@ function startPendingPoll(job: PendingJob): void {
       if (!pendingJobs.find(j => j.jobId === job.jobId)) return;
 
       try {
-        const prevCount = articles.length;
         await requestSync();
 
-        // If new articles appeared, check if any match this job's URL
-        if (articles.length > prevCount) {
-          const newArticle = articles.find(a =>
-            a.originalUrl === job.url && a.createdAt > job.startTime - 5000
-          );
-          if (newArticle) {
-            removePendingJob(job.jobId);
-            showToast(`"${newArticle.title}" is ready!`);
-            openArticle(newArticle.id);
-            return;
-          }
+        // Check if an article matching this job already exists
+        const match = articles.find(a =>
+          a.originalUrl === job.url && a.createdAt > job.startTime - 5000
+        );
+        if (match) {
+          removePendingJob(job.jobId);
+          showToast(`"${match.title}" is ready!`);
+          openArticle(match.id);
+          return;
         }
       } catch {
         // Sync failed — try again next interval
