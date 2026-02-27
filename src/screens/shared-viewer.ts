@@ -265,10 +265,25 @@ export async function renderSharedViewer(
           if (++attempts < 10) { requestAnimationFrame(trySetup); }
           return;
         }
-        // Fix links to open in new tab
+        // Fix anchor links to scroll within iframe instead of navigating
+        doc.querySelectorAll('a[href^="#"]').forEach(a => {
+          a.addEventListener('click', (e) => {
+            const href = a.getAttribute('href');
+            if (!href || href === '#') return;
+            e.preventDefault();
+            const target = doc.getElementById(href.slice(1));
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+        });
+        // External links open in new tab
         doc.querySelectorAll('a[href]').forEach(a => {
-          (a as HTMLAnchorElement).target = '_blank';
-          (a as HTMLAnchorElement).rel = 'noopener';
+          const href = a.getAttribute('href');
+          if (href && !href.startsWith('#')) {
+            (a as HTMLAnchorElement).target = '_blank';
+            (a as HTMLAnchorElement).rel = 'noopener';
+          }
         });
         attachLightbox(frame);
       }

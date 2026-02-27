@@ -1704,9 +1704,11 @@ function fixAnchorLinks(frame: HTMLIFrameElement): void {
       link.addEventListener('click', (e) => {
         const href = link.getAttribute('href');
         if (!href || href === '#') return;
+        // Always prevent default — the <base> tag would otherwise navigate
+        // the iframe to the original article URL instead of scrolling.
+        e.preventDefault();
         const target = doc.getElementById(href.slice(1));
         if (target) {
-          e.preventDefault();
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       });
