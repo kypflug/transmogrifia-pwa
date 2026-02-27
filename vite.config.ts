@@ -92,4 +92,14 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
   },
+  server: {
+    proxy: {
+      // Proxy cloud API requests to avoid CORS issues during local development
+      '/api/queue': {
+        target: 'https://transmogrifier-api.azurewebsites.net',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 });

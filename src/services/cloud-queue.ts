@@ -17,7 +17,8 @@ import { loadSettings, getEffectiveAIConfig, getEffectiveImageConfig } from './s
 import type { UserAIConfig, UserImageConfig, TransmogrifierSettings } from '../types';
 import { getDefaultRecipeId, recipeRequiresAI } from '../recipes';
 
-const CLOUD_API_URL = 'https://transmogrifier-api.azurewebsites.net';
+// In dev mode, use relative URL so Vite's proxy handles CORS
+const CLOUD_API_URL = import.meta.env.DEV ? '' : 'https://transmogrifier-api.azurewebsites.net';
 
 export interface CloudQueueResponse {
   jobId: string;
