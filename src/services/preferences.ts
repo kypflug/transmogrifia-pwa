@@ -24,8 +24,13 @@ const prefsCache: Record<string, string> = {};
 export async function initPreferences(): Promise<void> {
   if (prefsLoaded) return;
   const idbKeys = [KEYS.sort, KEYS.filter, KEYS.sidebarWidth] as const;
-  for (const key of idbKeys) {
-    const val = await getSettingsValue<string>(key);
+
+  // Read all keys in parallel (instead of sequential) to reduce IDB overhead
+  const values = await Promise.all(idbKeys.map(key => getSettingsValue<string>(key)));
+
+  for (let i = 0; i < idbKeys.length; i++) {
+    const key = idbKeys[i];
+    const val = values[i];
     if (val !== null && val !== undefined) {
       prefsCache[key] = val;
     } else {

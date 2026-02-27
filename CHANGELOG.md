@@ -9,6 +9,9 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 ### Fixed
 
 - **Pending jobs survive page reloads** — Cloud generation jobs (pending remixes) are now persisted to IndexedDB so they are not lost when the PWA reloads, e.g. when a new URL is shared via the OS share sheet. Previously, sharing a new URL would clear all other in-progress generations from the queue.
+- **Durable sign-in on desktop** — Proactively clean stale MSAL interaction state before `handleRedirectPromise()` when no redirect response is pending. This prevents the error path that could clear accounts and force re-login on desktop PWA re-opens.
+- **Faster recovery when accounts are missing** — Skip the `ssoSilent()` hidden iframe attempt (3–6 second timeout) when MSAL has no accounts. Falls through to a fast `loginRedirect` with `loginHint` instead.
+- **Faster boot** — Preferences are now read from IndexedDB in parallel (batched `Promise.all`) and pre-warmed during boot in parallel with MSAL initialization, removing ~100ms from the critical path before first paint.
 
 ---
 

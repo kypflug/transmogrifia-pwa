@@ -76,6 +76,16 @@ export async function initAuth(force = false): Promise<AuthenticationResult | nu
     return null;
   }
 
+  // Proactively clean stale interaction state when this page load is NOT
+  // returning from a redirect. Stale `interaction.status` keys (left by
+  // previous unclean PWA shutdowns or interrupted redirects) cause
+  // handleRedirectPromise() to throw, which can clear accounts and force
+  // a slow recovery path or full re-login. Cleaning before MSAL sees the
+  // stale state prevents the error entirely.
+  if (!hasRedirectResponse()) {
+    cleanUpStaleState();
+  }
+
   // handleRedirectPromise() MUST be called on every page load.
   // It returns non-null when the page is loading after a loginRedirect / acquireTokenRedirect.
   try {
@@ -144,6 +154,21 @@ function cleanUpStaleState(): void {
   } catch {
     // localStorage may be unavailable
   }
+}
+
+/**
+ * Detect whether this page load is returning from a MSAL login/token redirect.
+ * MSAL redirect responses include `code`, `error`, `id_token`, or `access_token`
+ * in the URL hash or query. Our app's own routes (#library, #settings) and the
+ * share target (?share-target) never contain these parameters.
+ */
+function hasRedirectResponse(): boolean {
+  const hash = window.location.hash;
+  if (hash.includes('code=') || hash.includes('error=') || hash.includes('id_token=') || hash.includes('access_token=')) {
+    return true;
+  }
+  const search = window.location.search;
+  return search.includes('code=');
 }
 
 /** Get the MSAL instance, assuming initAuth() has been called. */
@@ -389,8 +414,16 @@ export async function tryRecoverAuth(): Promise<boolean> {
   }
 
   // Step 2: try ssoSilent with login hint from account hint.
-  // Skip on iOS standalone PWAs — hidden iframes are blocked by third-party
-  // cookie restrictions, so ssoSilent always times out (~6s wasted).
+  // Skip when:
+  //  - iOS standalone PWA (hidden iframes blocked by third-party cookie restrictions)
+  //  - No MSAL accounts at all (ssoSilent requires functioning third-party cookies,
+  //    which are increasingly blocked in Edge/Chrome; when it fails it wastes 3-6s
+  //    on the timeout — the caller should auto-redirect with loginHint instead)
+  if (!account) {
+    console.debug('[Auth] No MSAL accounts — skipping ssoSilent, caller should redirect');
+    return false;
+  }
+
   if (!isIosStandalone()) {
     const hint = getAccountHint();
     if (hint?.username) {

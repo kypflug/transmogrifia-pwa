@@ -95,6 +95,10 @@ async function boot(app: HTMLElement): Promise<void> {
     return;
   }
 
+  // Pre-warm preferences from IndexedDB in parallel with auth initialization.
+  // By the time auth completes (~200-500ms), prefs are already loaded.
+  const prefsReady = initPreferences().catch(() => {});
+
   // Restore MSAL cache from IndexedDB if iOS wiped localStorage
   const cacheRestored = await restoreMsalCacheIfNeeded();
   if (cacheRestored) {
@@ -115,6 +119,7 @@ async function boot(app: HTMLElement): Promise<void> {
 
   if (redirectResponse?.account || isSignedIn()) {
     clearAutoRedirectMark();
+    await prefsReady;
     enterApp(app);
   } else if (cacheRestored || hasAccountHint()) {
     // Either IDB had auth data (iOS cache wipe) or localStorage still has an
@@ -127,6 +132,7 @@ async function boot(app: HTMLElement): Promise<void> {
     if (recovered && isSignedIn()) {
       console.info('[Boot] Auth recovered without user interaction');
       clearAutoRedirectMark();
+      await prefsReady;
       enterApp(app);
     } else if (canAutoRedirect()) {
       // Silent recovery failed but we have evidence of a previous session.
@@ -209,12 +215,9 @@ async function attemptAutoRedirect(app: HTMLElement): Promise<void> {
 function enterApp(app: HTMLElement): void {
   initBroadcast();
   postBroadcast({ type: 'auth-changed', signedIn: true });
-  // Load preferences from IndexedDB before rendering (Fix 14)
-  initPreferences().then(() => {
-    route(app);
-  }).catch(() => {
-    route(app); // fallback to localStorage-based prefs
-  });
+  // Preferences were pre-warmed during boot() — render immediately.
+  // Getters fall back to localStorage if IDB hasn't loaded yet (safe on all platforms).
+  route(app);
   window.addEventListener('hashchange', () => route(app));
   handleShareTarget();
   setupResumeHandler();
