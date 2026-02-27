@@ -50,6 +50,122 @@ function setDocumentMeta(title: string, description?: string, image?: string, ur
   setMeta('name', 'description', desc);
 }
 
+/** Return the fragment for same-document anchor links; otherwise null. */
+function getSameDocumentAnchorFragment(doc: Document, href: string): string | null {
+  if (!href || href === '#') return null;
+  if (href.startsWith('#')) return href.slice(1);
+  if (!href.includes('#')) return null;
+  try {
+    const base = new URL(doc.baseURI);
+    const parsed = new URL(href, base);
+    if (!parsed.hash) return null;
+    if (
+      parsed.origin === base.origin
+      && parsed.pathname === base.pathname
+      && parsed.search === base.search
+    ) {
+      return parsed.hash.slice(1);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Slugify text for use as a heading id attribute. */
+function textToSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/** Normalize text for fuzzy slug comparison (strip non-alphanumeric). */
+function normalizeForMatch(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+/**
+ * Assign id attributes to headings that don't have one.
+ * Uses slugified heading text, matching the convention used by
+ * most TOC generators. Duplicate slugs get a numeric suffix.
+ */
+function assignHeadingIds(doc: Document): void {
+  const usedIds = new Set<string>();
+  doc.querySelectorAll('[id]').forEach(el => usedIds.add(el.id));
+
+  doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+    if (heading.id) return;
+    const text = heading.textContent?.trim();
+    if (!text) return;
+    const slug = textToSlug(text);
+    if (!slug) return;
+    let candidate = slug;
+    let counter = 1;
+    while (usedIds.has(candidate)) {
+      candidate = `${slug}-${counter++}`;
+    }
+    heading.id = candidate;
+    usedIds.add(candidate);
+  });
+}
+
+/** Resolve an anchor fragment to the target element in `doc`. */
+function resolveAnchorTarget(doc: Document, fragment: string): Element | null {
+  let decoded: string;
+  try { decoded = decodeURIComponent(fragment); } catch { decoded = fragment; }
+  // Fast path: exact id or name match
+  const byId = doc.getElementById(fragment)
+    || doc.getElementById(decoded)
+    || doc.getElementsByName(fragment)[0]
+    || doc.getElementsByName(decoded)[0];
+  if (byId) return byId;
+
+  // Fallback: match heading text content against the fragment
+  const normFragment = normalizeForMatch(decoded);
+  if (!normFragment) return null;
+  const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  for (const h of headings) {
+    if (normalizeForMatch(h.textContent?.trim() || '') === normFragment) return h;
+  }
+  return null;
+}
+
+/** Find the nearest ancestor of `el` that is actually scrollable. */
+function findScrollableAncestor(doc: Document, el: Element): Element | null {
+  let node = el.parentElement;
+  while (node && node !== doc.documentElement) {
+    const style = getComputedStyle(node);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll')
+      && node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/** Scroll the iframe viewport so `target` is at the top. */
+function scrollIframeToTarget(doc: Document, target: Element): void {
+  const scrollable = findScrollableAncestor(doc, target);
+  if (scrollable) {
+    const containerRect = scrollable.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    scrollable.scrollTo({
+      top: scrollable.scrollTop + (targetRect.top - containerRect.top),
+      behavior: 'smooth',
+    });
+  } else {
+    const win = doc.defaultView;
+    if (win) {
+      win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
+    }
+  }
+}
+
 /**
  * Render the shared article viewer into the given container.
  * Bypasses the normal auth gate entirely.
@@ -265,34 +381,29 @@ export async function renderSharedViewer(
           if (++attempts < 10) { requestAnimationFrame(trySetup); }
           return;
         }
-        // Fix anchor links to scroll within iframe instead of navigating
-        doc.querySelectorAll('a[href^="#"]').forEach(a => {
+        // Fix same-document hash links to scroll within iframe instead of navigating
+        assignHeadingIds(doc);
+        doc.querySelectorAll('a[href]').forEach(a => {
           a.addEventListener('click', (e) => {
             const href = a.getAttribute('href');
-            if (!href || href === '#') return;
+            if (!href) return;
+            const fragment = getSameDocumentAnchorFragment(doc, href);
+            if (fragment === null) return;
             e.preventDefault();
-            const fragment = href.slice(1);
-            let decoded: string;
-            try { decoded = decodeURIComponent(fragment); } catch { decoded = fragment; }
-            const target = doc.getElementById(fragment)
-              || doc.getElementById(decoded)
-              || doc.querySelector(`[name="${CSS.escape(fragment)}"]`)
-              || doc.querySelector(`[name="${CSS.escape(decoded)}"]`);
+            const target = resolveAnchorTarget(doc, fragment);
             if (target) {
-              const win = doc.defaultView;
-              if (win) {
-                win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
-              }
+              scrollIframeToTarget(doc, target);
+            } else {
+              console.warn('[anchor] target not found for fragment:', fragment);
             }
           });
         });
         // External links open in new tab
         doc.querySelectorAll('a[href]').forEach(a => {
           const href = a.getAttribute('href');
-          if (href && !href.startsWith('#')) {
-            (a as HTMLAnchorElement).target = '_blank';
-            (a as HTMLAnchorElement).rel = 'noopener';
-          }
+          if (!href || getSameDocumentAnchorFragment(doc, href) !== null) return;
+          (a as HTMLAnchorElement).target = '_blank';
+          (a as HTMLAnchorElement).rel = 'noopener';
         });
         attachLightbox(frame);
       }

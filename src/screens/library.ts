@@ -1696,21 +1696,121 @@ function formatRelativeTime(timestamp: number): string {
   return `${days}d ago`;
 }
 
+/** Return the fragment for same-document anchor links; otherwise null. */
+function getSameDocumentAnchorFragment(doc: Document, href: string): string | null {
+  if (!href || href === '#') return null;
+  if (href.startsWith('#')) return href.slice(1);
+  if (!href.includes('#')) return null;
+  try {
+    const base = new URL(doc.baseURI);
+    const parsed = new URL(href, base);
+    if (!parsed.hash) return null;
+    if (
+      parsed.origin === base.origin
+      && parsed.pathname === base.pathname
+      && parsed.search === base.search
+    ) {
+      return parsed.hash.slice(1);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Slugify text for use as a heading id attribute. */
+function textToSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/** Normalize text for fuzzy slug comparison (strip non-alphanumeric). */
+function normalizeForMatch(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+/**
+ * Assign id attributes to headings that don't have one.
+ * Uses slugified heading text, matching the convention used by
+ * most TOC generators. Duplicate slugs get a numeric suffix.
+ */
+function assignHeadingIds(doc: Document): void {
+  const usedIds = new Set<string>();
+  doc.querySelectorAll('[id]').forEach(el => usedIds.add(el.id));
+
+  doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+    if (heading.id) return;
+    const text = heading.textContent?.trim();
+    if (!text) return;
+    const slug = textToSlug(text);
+    if (!slug) return;
+    let candidate = slug;
+    let counter = 1;
+    while (usedIds.has(candidate)) {
+      candidate = `${slug}-${counter++}`;
+    }
+    heading.id = candidate;
+    usedIds.add(candidate);
+  });
+}
+
 /** Resolve an anchor fragment to the target element in `doc`. */
 function resolveAnchorTarget(doc: Document, fragment: string): Element | null {
   let decoded: string;
   try { decoded = decodeURIComponent(fragment); } catch { decoded = fragment; }
-  return doc.getElementById(fragment)
+  // Fast path: exact id or name match
+  const byId = doc.getElementById(fragment)
     || doc.getElementById(decoded)
-    || doc.querySelector(`[name="${CSS.escape(fragment)}"]`)
-    || doc.querySelector(`[name="${CSS.escape(decoded)}"]`);
+    || doc.getElementsByName(fragment)[0]
+    || doc.getElementsByName(decoded)[0];
+  if (byId) return byId;
+
+  // Fallback: match heading text content against the fragment
+  const normFragment = normalizeForMatch(decoded);
+  if (!normFragment) return null;
+  const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  for (const h of headings) {
+    if (normalizeForMatch(h.textContent?.trim() || '') === normFragment) return h;
+  }
+  return null;
+}
+
+/** Find the nearest ancestor of `el` that is actually scrollable. */
+function findScrollableAncestor(doc: Document, el: Element): Element | null {
+  let node = el.parentElement;
+  while (node && node !== doc.documentElement) {
+    const style = getComputedStyle(node);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll')
+      && node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
 }
 
 /** Scroll the iframe viewport so `target` is at the top. */
 function scrollIframeToTarget(doc: Document, target: Element): void {
-  const win = doc.defaultView;
-  if (win) {
-    win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
+  const scrollable = findScrollableAncestor(doc, target);
+  if (scrollable) {
+    // Inner scroll container (e.g. a wrapper div made scrollable by fixScrollBlocking)
+    const containerRect = scrollable.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    scrollable.scrollTo({
+      top: scrollable.scrollTop + (targetRect.top - containerRect.top),
+      behavior: 'smooth',
+    });
+  } else {
+    // Fall back to window scroll (html/body is the scroll root)
+    const win = doc.defaultView;
+    if (win) {
+      win.scrollTo({ top: target.getBoundingClientRect().top + win.scrollY, behavior: 'smooth' });
+    }
   }
 }
 
@@ -1718,21 +1818,28 @@ function fixAnchorLinks(frame: HTMLIFrameElement): void {
   try {
     const doc = frame.contentDocument;
     if (!doc) return;
-    doc.querySelectorAll('a[href^="#"]').forEach(link => {
+    assignHeadingIds(doc);
+    doc.querySelectorAll('a[href]').forEach(link => {
       link.addEventListener('click', (e) => {
         const href = link.getAttribute('href');
-        if (!href || href === '#') return;
+        if (!href) return;
+        const fragment = getSameDocumentAnchorFragment(doc, href);
+        if (fragment === null) return;
         // Always prevent default — the <base> tag would otherwise navigate
         // the iframe to the original article URL instead of scrolling.
         e.preventDefault();
-        const target = resolveAnchorTarget(doc, href.slice(1));
+        const target = resolveAnchorTarget(doc, fragment);
         if (target) {
           scrollIframeToTarget(doc, target);
+        } else {
+          console.warn('[anchor] target not found for fragment:', fragment);
         }
       });
     });
     // External links open in new tab
-    doc.querySelectorAll('a[href^="http"]').forEach(link => {
+    doc.querySelectorAll('a[href]').forEach(link => {
+      const href = link.getAttribute('href');
+      if (!href || getSameDocumentAnchorFragment(doc, href) !== null) return;
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener');
     });

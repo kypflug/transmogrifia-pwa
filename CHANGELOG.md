@@ -4,11 +4,12 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [1.5.16] — 2026-02-27
 
 ### Fixed
 
 - **Anchor links broken in reader and shared viewer** — In-page `#fragment` links inside articles now scroll to the target element instead of silently failing. Replaced `scrollIntoView()` (unreliable inside sandboxed `srcdoc` iframes) with explicit `window.scrollTo()` on the iframe's viewport. Also: the `<base>` tag was causing unhandled anchor clicks to attempt cross-origin navigation; the shared viewer was setting `target="_blank"` on all links including anchors. Target lookup now handles URL-encoded fragments and `name` attributes.
+- **URL-form anchor links still not scrolling** — Anchor handling now treats same-document hash links consistently even when they are relative or absolute URL forms (not only `href="#..."`). Also fixed `window.scrollTo()` having no effect when the real scroll container is an inner wrapper div (e.g. `#root`) that `fixScrollBlocking` converted to `overflow:auto`; anchor clicks now walk the DOM to find the nearest scrollable ancestor and scroll that instead. Finally, headings without `id` attributes (common in AI-generated articles) now get slugified IDs assigned automatically, and a text-matching fallback resolves anchors even when the slug doesn't match exactly.
 
 ---
 
