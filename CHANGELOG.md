@@ -4,7 +4,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
-## [Unreleased]
+## [1.5.15] — 2026-02-27
 
 ### Fixed
 
@@ -20,6 +20,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 - **Durable sign-in on desktop** — Proactively clean stale MSAL interaction state before `handleRedirectPromise()` when no redirect response is pending. This prevents the error path that could clear accounts and force re-login on desktop PWA re-opens.
 - **Faster recovery when accounts are missing** — Skip the `ssoSilent()` hidden iframe attempt (3–6 second timeout) when MSAL has no accounts. Falls through to a fast `loginRedirect` with `loginHint` instead.
 - **Faster boot** — Preferences are now read from IndexedDB in parallel (batched `Promise.all`) and pre-warmed during boot in parallel with MSAL initialization, removing ~100ms from the critical path before first paint.
+- **Shared viewer lightbox race conditions** — Fixed lightbox not activating on shared article pages by registering the iframe `onload` handler before setting `srcdoc` and deferring lightbox setup by one animation frame, matching the library viewer's working pattern. Also fixed a null-check error in the shared-viewer iframe reference.
 
 ### Changed
 
