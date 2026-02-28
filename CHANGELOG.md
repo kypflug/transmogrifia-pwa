@@ -4,6 +4,15 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.17] — 2026-02-28
+
+### Fixed
+
+- **Reader placeholder no longer a WCO drag region** — Removed `app-region: drag` from the entire `.reading-pane` in Window Controls Overlay mode; only the dedicated `.reader-titlebar` strip is now draggable. The previous behavior blocked interaction with browser extension dialogs (e.g. 1Password) that overlay the placeholder area.
+- **Globe icon hidden by window controls in shared reader** — In PWA mode with Window Controls Overlay, the source-link globe button (🌐) on the shared article viewer chrome bar now insets to the left of the OS window controls instead of drawing underneath them.
+
+---
+
 ## [1.5.16] — 2026-02-27
 
 ### Fixed

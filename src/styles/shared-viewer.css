@@ -99,6 +99,13 @@
   to { transform: rotate(360deg); }
 }
 
+/* ===== WCO: clear window controls on the right ===== */
+@media (display-mode: window-controls-overlay) {
+  .shared-viewer-chrome {
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+  }
+}
+
 /* ===== Article Frame ===== */
 .shared-viewer-frame {
   flex: 1;

@@ -506,21 +506,7 @@ body.is-offline .offline-banner {
     justify-self: end;
   }
 
-  /* Reading pane itself is draggable when no article header is visible */
-  .reading-pane {
-    -webkit-app-region: drag;
-    app-region: drag;
-  }
-
-  /* Exclude interactive children inside the reading pane from drag */
-  .reading-pane button,
-  .reading-pane a,
-  .reading-pane iframe {
-    -webkit-app-region: no-drag;
-    app-region: no-drag;
-  }
-
-  /* Reader placeholder also clears the titlebar area */
+  /* Reader placeholder clears the titlebar area (reader-titlebar is abs-positioned) */
   .reader-placeholder {
     padding-top: env(titlebar-area-height, 0px);
   }
