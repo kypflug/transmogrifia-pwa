@@ -81,6 +81,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [1.5.17] — 2026-02-28
+
+### Added
+
+- **Source URL in shared page OG tags** — Shared article pages now include `<meta property="article:source">` with the original article URL, enabling external consumers (blog linkrolls, social cards) to display source attribution alongside Transmogrifia reader links.
+
+---
+
 ## [1.5.9] — 2026-02-17
 
 ### Changed

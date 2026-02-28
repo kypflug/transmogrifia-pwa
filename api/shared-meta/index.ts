@@ -89,7 +89,7 @@ const DEFAULT_DESC = 'A transmogrified article — beautiful web content, reimag
  */
 function injectMetaTags(
   html: string,
-  opts: { title?: string; description?: string; image?: string; pageUrl?: string },
+  opts: { title?: string; description?: string; image?: string; pageUrl?: string; originalUrl?: string },
 ): string {
   if (!opts.title) return html;
 
@@ -105,6 +105,10 @@ function injectMetaTags(
     <meta property="og:url" content="${escapeAttr(pageUrl)}">
     <meta property="og:type" content="article">
     <meta property="og:site_name" content="Library of Transmogrifia">${
+      opts.originalUrl
+        ? `\n    <meta property="article:source" content="${escapeAttr(opts.originalUrl)}">`
+        : ''
+    }${
       opts.image
         ? `\n    <meta property="og:image" content="${escapeAttr(opts.image)}">\n    <meta name="twitter:image" content="${escapeAttr(opts.image)}">`
         : ''
@@ -176,6 +180,7 @@ async function handler(
       description: resolved.description,
       image: resolved.image,
       pageUrl: `${origin}/shared/${code}`,
+      originalUrl: resolved.originalUrl,
     }),
   };
 }
