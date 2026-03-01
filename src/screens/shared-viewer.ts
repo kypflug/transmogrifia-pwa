@@ -196,12 +196,16 @@ export async function renderSharedViewer(
     let scrollHeight = 0;
     let clientHeight = 0;
 
+    // iOS Safari tracks viewport scroll on window, not documentElement/body.
+    // Fall back to contentWindow.scrollY when scrollTop reads as 0.
+    const win = frame.contentWindow;
+
     if (html.scrollHeight > html.clientHeight + 1) {
-      scrollTop = html.scrollTop;
+      scrollTop = html.scrollTop || win?.scrollY || 0;
       scrollHeight = html.scrollHeight;
       clientHeight = html.clientHeight;
     } else if (body && body.scrollHeight > body.clientHeight + 1) {
-      scrollTop = body.scrollTop;
+      scrollTop = body.scrollTop || win?.scrollY || 0;
       scrollHeight = body.scrollHeight;
       clientHeight = body.clientHeight;
     } else {
@@ -230,6 +234,7 @@ export async function renderSharedViewer(
 
     const html = doc.documentElement;
     const body = doc.body;
+    const win = frame.contentWindow;
 
     const scheduleUpdate = () => {
       if (progressRafPending) return;
@@ -244,12 +249,14 @@ export async function renderSharedViewer(
     doc.addEventListener('scroll', scheduleUpdate, options);
     html?.addEventListener('scroll', scheduleUpdate, options);
     body?.addEventListener('scroll', scheduleUpdate, options);
+    win?.addEventListener('scroll', scheduleUpdate, options);
     window.addEventListener('resize', scheduleUpdate, options);
 
     cleanupProgressTracking = () => {
       doc.removeEventListener('scroll', scheduleUpdate);
       html?.removeEventListener('scroll', scheduleUpdate);
       body?.removeEventListener('scroll', scheduleUpdate);
+      win?.removeEventListener('scroll', scheduleUpdate);
       window.removeEventListener('resize', scheduleUpdate);
     };
 

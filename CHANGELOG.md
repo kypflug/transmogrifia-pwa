@@ -4,11 +4,19 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Reading progress bar broken on iOS** — The thin blue scroll-progress bar stayed at 0% on iOS Safari (both library reader and shared viewer). iOS fires viewport scroll events on `contentWindow`, not `document`/`documentElement`/`body` inside iframes. Added `contentWindow` as a scroll listener target and fall back to `window.scrollY` when `scrollTop` reads as 0.
+
+---
+
 ## [1.5.17] — 2026-02-28
 
 ### Fixed
 
-- **Reader placeholder no longer a WCO drag region** — Removed `app-region: drag` from the entire `.reading-pane` in Window Controls Overlay mode; only the dedicated `.reader-titlebar` strip is now draggable. The previous behavior blocked interaction with browser extension dialogs (e.g. 1Password) that overlay the placeholder area.
+- **Reader placeholder no longer a WCO drag region**— Removed `app-region: drag` from the entire `.reading-pane` in Window Controls Overlay mode; only the dedicated `.reader-titlebar` strip is now draggable. The previous behavior blocked interaction with browser extension dialogs (e.g. 1Password) that overlay the placeholder area.
 - **Globe icon hidden by window controls in shared reader** — In PWA mode with Window Controls Overlay, the source-link globe button (🌐) on the shared article viewer chrome bar now insets to the left of the OS window controls instead of drawing underneath them.
 
 ---
