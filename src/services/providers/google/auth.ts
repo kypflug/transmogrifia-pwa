@@ -22,7 +22,7 @@ import {
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-const CLIENT_ID = ''; // TODO: Replace with GCP OAuth Client ID
+const CLIENT_ID = '896663119069-nq0ur8ed7c7td44v6o29gu3qdr9t1un7.apps.googleusercontent.com';
 const REDIRECT_URI = window.location.origin + '/';
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
