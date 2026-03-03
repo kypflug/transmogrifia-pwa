@@ -1,5 +1,12 @@
-import { initAuth, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint, signInWithHint } from './services/auth';
-import { restoreMsalCacheIfNeeded, setupBackgroundBackup } from './services/msal-cache-backup';
+import { initAuth, signIn, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint, signInWithHint, setupBackgroundBackup } from './services/auth';
+import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
+import { restoreGoogleTokensIfNeeded } from './services/providers/google/token-backup';
+import { setProviders, getProviderType } from './services/providers/registry';
+import { createMicrosoftAuth } from './services/providers/microsoft/auth';
+import { createOneDriveStorage } from './services/providers/microsoft/storage';
+import { createGoogleAuth } from './services/providers/google/auth';
+import { createGoogleDriveStorage } from './services/providers/google/storage';
+import type { AuthProviderType } from './services/providers/types';
 import { initBroadcast, postBroadcast } from './services/broadcast';
 import { initPreferences } from './services/preferences';
 import { renderSignIn } from './screens/sign-in';
@@ -56,10 +63,10 @@ boot(app).catch(err => {
       // Network/connectivity errors
       else if (errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('timeout')) {
         errorMessage = 'Connection failed';
-        errorDetails = 'Could not connect to Microsoft services. Check your internet connection and try again.';
+        errorDetails = 'Could not connect to sign-in services. Check your internet connection and try again.';
       }
-      // MSAL/auth errors
-      else if (errMsg.includes('msal') || errMsg.includes('auth') || errMsg.includes('token')) {
+      // Auth errors
+      else if (errMsg.includes('msal') || errMsg.includes('auth') || errMsg.includes('token') || errMsg.includes('oauth')) {
         errorMessage = 'Authentication error';
         errorDetails = 'There was a problem with sign-in. Please reload and try again.';
       }
@@ -96,59 +103,127 @@ async function boot(app: HTMLElement): Promise<void> {
   }
 
   // Pre-warm preferences from IndexedDB in parallel with auth initialization.
-  // By the time auth completes (~200-500ms), prefs are already loaded.
   const prefsReady = initPreferences().catch(() => {});
 
-  // Restore MSAL cache from IndexedDB if iOS wiped localStorage
-  const cacheRestored = await restoreMsalCacheIfNeeded();
-  if (cacheRestored) {
-    console.info('[Boot] MSAL cache restored from IndexedDB backup');
-  }
+  // ─── Provider detection ───
+  // Determine which auth+storage provider to use:
+  //  1. URL has ?code= → Google OAuth callback (returning from redirect)
+  //  2. URL hash has MSAL redirect params → Microsoft redirect callback
+  //  3. Persisted provider type → returning user
+  //  4. None → new user, show sign-in screen
+  const detectedType = detectProviderFromUrl() || getProviderType();
 
-  // initAuth() returns a non-null AuthenticationResult when this page load
-  // is the result of a loginRedirect completing. In that case the user is
-  // now signed in and we should go straight to the library.
-  const redirectResponse = await initAuth();
+  if (detectedType) {
+    initializeProviders(detectedType);
 
-  // Fix 19: Auth redirect handling is done — safe to activate pending SW update
-  authBootComplete = true;
-  if (pendingSwUpdate) {
-    pendingSwUpdate().catch(() => {});
-    pendingSwUpdate = null;
-  }
+    // Restore cached auth tokens from IndexedDB if iOS wiped localStorage
+    let cacheRestored = false;
+    if (detectedType === 'microsoft') {
+      cacheRestored = await restoreMsalCacheIfNeeded();
+      if (cacheRestored) {
+        console.info('[Boot] MSAL cache restored from IndexedDB backup');
+      }
+    } else {
+      cacheRestored = await restoreGoogleTokensIfNeeded();
+      if (cacheRestored) {
+        console.info('[Boot] Google tokens restored from IndexedDB backup');
+      }
+    }
 
-  if (redirectResponse?.account || isSignedIn()) {
-    clearAutoRedirectMark();
-    await prefsReady;
-    enterApp(app);
-  } else if (cacheRestored || hasAccountHint()) {
-    // Either IDB had auth data (iOS cache wipe) or localStorage still has an
-    // account hint from a previous session but MSAL can't find valid accounts
-    // (stale redirect state may have cleared them). Try silent recovery before
-    // falling back to the sign-in screen.
-    console.debug('[Boot] isSignedIn()=false but account evidence exists (cacheRestored=%s, accountHint=%s) — attempting recovery',
-      cacheRestored, hasAccountHint());
-    const recovered = await tryRecoverAuth();
-    if (recovered && isSignedIn()) {
-      console.info('[Boot] Auth recovered without user interaction');
+    // initAuth() processes any pending redirect response (MSAL hash or Google ?code=).
+    const redirectResponse = await initAuth();
+
+    // Fix 19: Auth redirect handling is done — safe to activate pending SW update
+    authBootComplete = true;
+    if (pendingSwUpdate) {
+      pendingSwUpdate().catch(() => {});
+      pendingSwUpdate = null;
+    }
+
+    if (redirectResponse?.account || isSignedIn()) {
       clearAutoRedirectMark();
       await prefsReady;
       enterApp(app);
-    } else if (canAutoRedirect()) {
-      // Silent recovery failed but we have evidence of a previous session.
-      // Auto-redirect to Microsoft login with the saved loginHint so the
-      // user doesn't have to tap "Sign In" manually. The Microsoft session
-      // cookie is usually still valid so this completes quickly.
-      console.info('[Boot] Silent recovery failed — auto-redirecting to Microsoft login');
-      markAutoRedirected();
-      await attemptAutoRedirect(app);
+    } else if (cacheRestored || hasAccountHint()) {
+      console.debug('[Boot] isSignedIn()=false but account evidence exists (cacheRestored=%s, accountHint=%s) — attempting recovery',
+        cacheRestored, hasAccountHint());
+      const recovered = await tryRecoverAuth();
+      if (recovered && isSignedIn()) {
+        console.info('[Boot] Auth recovered without user interaction');
+        clearAutoRedirectMark();
+        await prefsReady;
+        enterApp(app);
+      } else if (canAutoRedirect()) {
+        console.info('[Boot] Silent recovery failed — auto-redirecting to login');
+        markAutoRedirected();
+        await attemptAutoRedirect(app);
+      } else {
+        console.debug('[Boot] Recovery failed, auto-redirect already attempted — showing sign-in');
+        renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
+      }
     } else {
-      console.debug('[Boot] Recovery failed, auto-redirect already attempted — showing sign-in');
-      renderSignIn(app, () => enterApp(app));
+      renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
     }
   } else {
-    renderSignIn(app, () => enterApp(app));
+    // No provider detected — first visit or signed out. Show sign-in screen.
+    authBootComplete = true;
+    if (pendingSwUpdate) {
+      pendingSwUpdate().catch(() => {});
+      pendingSwUpdate = null;
+    }
+    renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
   }
+}
+
+// ─── Provider initialization helpers ───
+
+/** Create and register auth + storage providers for the given type. */
+function initializeProviders(type: AuthProviderType): void {
+  if (type === 'microsoft') {
+    const auth = createMicrosoftAuth();
+    const storage = createOneDriveStorage(() => auth.getAccessToken());
+    setProviders(auth, storage);
+  } else {
+    const auth = createGoogleAuth();
+    const storage = createGoogleDriveStorage(() => auth.getAccessToken());
+    setProviders(auth, storage);
+  }
+}
+
+/**
+ * Detect the provider type from the current URL.
+ * - Google OAuth callback: `?code=` in query string
+ * - MSAL redirect callback: auth params in hash (code=, id_token=, access_token=, error=)
+ * Returns null if URL doesn't indicate a redirect callback.
+ */
+function detectProviderFromUrl(): AuthProviderType | null {
+  const search = window.location.search;
+  const hash = window.location.hash;
+
+  // Google OAuth callback — ?code= in query string (with code_verifier in localStorage)
+  if (search.includes('code=') && !search.includes('share-target')) {
+    return 'google';
+  }
+
+  // MSAL redirect callback — auth params in hash
+  if (hash.includes('code=') || hash.includes('error=') || hash.includes('id_token=') || hash.includes('access_token=')) {
+    return 'microsoft';
+  }
+
+  return null;
+}
+
+/**
+ * Create the onProviderSelected callback for the sign-in screen.
+ * When a user clicks a sign-in button, this sets up the provider and initiates sign-in.
+ */
+function handleProviderSelected(_app: HTMLElement): (type: AuthProviderType) => Promise<void> {
+  return async (type: AuthProviderType) => {
+    initializeProviders(type);
+    await signIn();
+    // signIn() redirects away; this code won't continue on regular browsers.
+    // On iOS PWA the visibilitychange handler in sign-in.ts handles the return.
+  };
 }
 
 // ─── Auto-redirect helpers (iOS session recovery) ───
@@ -172,7 +247,7 @@ function clearAutoRedirectMark(): void {
 }
 
 /**
- * Auto-redirect to Microsoft login with the saved loginHint.
+ * Auto-redirect to login with the saved loginHint.
  * Keeps the boot loading spinner visible while the redirect opens.
  *
  * On iOS standalone PWA, loginRedirect opens an in-app Safari sheet rather
@@ -198,7 +273,7 @@ async function attemptAutoRedirect(app: HTMLElement): Promise<void> {
     } catch { /* fall through */ }
 
     // Auto-redirect didn't result in sign-in — show manual sign-in
-    renderSignIn(app, () => enterApp(app));
+    renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
   };
   document.addEventListener('visibilitychange', handler);
 
@@ -207,7 +282,7 @@ async function attemptAutoRedirect(app: HTMLElement): Promise<void> {
     await signInWithHint();
   } catch {
     document.removeEventListener('visibilitychange', handler);
-    renderSignIn(app, () => enterApp(app));
+    renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
   }
 }
 
@@ -215,8 +290,6 @@ async function attemptAutoRedirect(app: HTMLElement): Promise<void> {
 function enterApp(app: HTMLElement): void {
   initBroadcast();
   postBroadcast({ type: 'auth-changed', signedIn: true });
-  // Preferences were pre-warmed during boot() — render immediately.
-  // Getters fall back to localStorage if IDB hasn't loaded yet (safe on all platforms).
   route(app);
   window.addEventListener('hashchange', () => route(app));
   handleShareTarget();

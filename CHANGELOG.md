@@ -6,6 +6,14 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Google Sign-in + Google Drive sync** — Users can now sign in with their Google account in addition to Microsoft. Articles and settings sync via Google Drive's App Data folder using the same data format as OneDrive. Auth+storage are coupled: Microsoft→OneDrive, Google→Google Drive.
+- **Provider abstraction layer** — Auth and storage are now abstracted behind `AuthProvider` and `StorageProvider` interfaces (`src/services/providers/`). The existing `auth.ts` and `graph.ts` are thin facades delegating to the active provider, so all downstream consumers (sync-coordinator, library, settings, cloud-queue) required zero changes.
+- **Google OAuth 2.0 with PKCE** — Uses Authorization Code flow with S256 PKCE code challenge for secure browser-based auth. Refresh tokens are stored in localStorage with IndexedDB backup (same iOS durability pattern as MSAL).
+- **Google Drive App Data API** — Flat file structure in the hidden `appDataFolder` with `changes.list` incremental sync (equivalent to OneDrive delta API). File ID caching avoids redundant name lookups.
+- **Google sign-in button on sign-in screen** — Official multi-color Google "G" logo, "or" divider between Microsoft and Google buttons.
+
 ### Fixed
 
 - **Reading progress bar broken on iOS** — The thin blue scroll-progress bar stayed at 0% on iOS Safari (both library reader and shared viewer). iOS fires viewport scroll events on `contentWindow`, not `document`/`documentElement`/`body` inside iframes. Added `contentWindow` as a scroll listener target and fall back to `window.scrollY` when `scrollTop` reads as 0.
