@@ -94,6 +94,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // Google OAuth token proxy — local Azure Functions host during dev
+      '/api/google-token': {
+        target: 'http://localhost:7071',
+        changeOrigin: true,
+      },
       // Proxy cloud API requests to avoid CORS issues during local development
       '/api': {
         target: 'https://transmogrifier-api.azurewebsites.net',

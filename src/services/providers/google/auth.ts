@@ -25,7 +25,9 @@ import {
 const CLIENT_ID = '896663119069-nq0ur8ed7c7td44v6o29gu3qdr9t1un7.apps.googleusercontent.com';
 const REDIRECT_URI = window.location.origin + '/';
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
-const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+// Token exchange goes through our BFF proxy which injects the client_secret
+// server-side. In dev mode, Vite proxies /api to the local Functions host.
+const TOKEN_PROXY_ENDPOINT = '/api/google-token';
 const USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid profile email';
 
@@ -461,14 +463,13 @@ export class GoogleAuthProvider implements AuthProvider {
       throw new Error('Missing code_verifier — auth flow may have been interrupted');
     }
 
-    const res = await fetch(TOKEN_ENDPOINT, {
+    const res = await fetch(TOKEN_PROXY_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: CLIENT_ID,
-        redirect_uri: REDIRECT_URI,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
         code_verifier: verifier,
       }),
     });
@@ -511,13 +512,12 @@ export class GoogleAuthProvider implements AuthProvider {
       throw new Error('No refresh token available — user must sign in again');
     }
 
-    const res = await fetch(TOKEN_ENDPOINT, {
+    const res = await fetch(TOKEN_PROXY_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: CLIENT_ID,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         grant_type: 'refresh_token',
+        refresh_token: refreshToken,
       }),
     });
 

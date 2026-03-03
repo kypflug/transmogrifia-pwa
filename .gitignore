@@ -3,6 +3,7 @@ dist/
 !api/dist/
 *.local
 .env
+local.settings.json
 
 # Raw AI-generated images (keep only processed versions)
 public/images/*-raw.png

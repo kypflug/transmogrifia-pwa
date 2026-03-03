@@ -88,7 +88,9 @@ function injectMetaTags(html, opts) {
     <meta property="og:description" content="${escapeAttr(desc)}">
     <meta property="og:url" content="${escapeAttr(pageUrl)}">
     <meta property="og:type" content="article">
-    <meta property="og:site_name" content="Library of Transmogrifia">${opts.image
+    <meta property="og:site_name" content="Library of Transmogrifia">${opts.originalUrl
+        ? `\n    <meta property="article:source" content="${escapeAttr(opts.originalUrl)}">`
+        : ''}${opts.image
         ? `\n    <meta property="og:image" content="${escapeAttr(opts.image)}">\n    <meta name="twitter:image" content="${escapeAttr(opts.image)}">`
         : ''}
     <meta name="twitter:card" content="${twitterCard}">
@@ -141,6 +143,7 @@ async function handler(req, _context) {
             description: resolved.description,
             image: resolved.image,
             pageUrl: `${origin}/shared/${code}`,
+            originalUrl: resolved.originalUrl,
         }),
     };
 }
