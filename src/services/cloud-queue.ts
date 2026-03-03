@@ -16,6 +16,7 @@ import { getAccessToken } from './auth';
 import { loadSettings, getEffectiveAIConfig, getEffectiveImageConfig } from './settings';
 import type { UserAIConfig, UserImageConfig, TransmogrifierSettings } from '../types';
 import { getDefaultRecipeId, recipeRequiresAI } from '../recipes';
+import { getProviderType } from './providers/registry';
 
 // In dev mode, use relative URL so Vite's proxy handles CORS
 const CLOUD_API_URL = import.meta.env.DEV ? '' : 'https://transmogrifier-api.azurewebsites.net';
@@ -74,6 +75,7 @@ export async function queueForCloud(
     recipeId,
     accessToken,
     customPrompt,
+    storageProvider: getProviderType() || 'microsoft',
   };
 
   if (userAIConfig) {
