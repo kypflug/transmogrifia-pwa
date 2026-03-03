@@ -23,9 +23,12 @@ const SNAPSHOT_KEY = 'google-snapshot';
  */
 const GOOGLE_KEY_PATTERNS = ['transmogrifia_google_'];
 
-/** Returns true if a localStorage key belongs to Google auth. */
+/** Returns true if a localStorage key belongs to Google auth (excluding transient keys). */
 function isGoogleKey(key: string): boolean {
-  return GOOGLE_KEY_PATTERNS.some(p => key.includes(p));
+  if (!GOOGLE_KEY_PATTERNS.some(p => key.includes(p))) return false;
+  // code_verifier is transient (only valid during active auth flow) — don't back up
+  if (key.includes('code_verifier')) return false;
+  return true;
 }
 
 function openBackupDB(): Promise<IDBDatabase> {

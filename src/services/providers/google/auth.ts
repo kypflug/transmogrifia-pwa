@@ -523,11 +523,13 @@ export class GoogleAuthProvider implements AuthProvider {
 
     if (!res.ok) {
       const errorBody = await res.text();
-      // If the refresh token has been revoked, clear it to prevent retry loops
+      // If the refresh token has been revoked, clear all tokens to prevent retry loops
       if (res.status === 400 || res.status === 401) {
         console.warn('[GoogleAuth] Refresh token rejected, clearing stored tokens');
         storageRemove(KEY_ACCESS_TOKEN);
         storageRemove(KEY_TOKEN_EXPIRY);
+        storageRemove(KEY_REFRESH_TOKEN);
+        storageRemove(KEY_ID_TOKEN);
       }
       throw new Error(`Token refresh failed (${res.status}): ${errorBody}`);
     }
