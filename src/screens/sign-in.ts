@@ -1,4 +1,5 @@
 import { signIn, isSignedIn, initAuth } from '../services/auth';
+import { hasProviders } from '../services/providers/registry';
 import type { AuthProviderType } from '../services/providers/types';
 
 export function renderSignIn(
@@ -8,8 +9,10 @@ export function renderSignIn(
 ): void {
   // Fast-path: if already signed in (e.g. MSAL loaded accounts from
   // localStorage after boot's auth check completed), skip straight to
-  // the app instead of showing the sign-in screen.
-  if (isSignedIn()) {
+  // the app instead of showing the sign-in screen. Guard with
+  // hasProviders() because this function can be called before providers
+  // are initialised (e.g. new user, cleared storage).
+  if (hasProviders() && isSignedIn()) {
     onSuccess();
     return;
   }

@@ -20,6 +20,7 @@ All notable changes to Library of Transmogrifia will be documented in this file.
 - **Desktop PWA stuck on sign-in screen with unresponsive button** — When the PWA re-opened and showed the sign-in screen for an already-authenticated user, clicking "Sign in with Microsoft" had no effect. Root cause: `handleProviderSelected()` created a fresh `MicrosoftAuthProvider` (replacing the boot-initialised one) then called `signIn()` without calling `init()`, causing `getMsal()` to throw silently. Fixed by reusing existing providers when the type matches and always calling `initAuth()` before `signIn()`.
 - **Cross-provider session recovery** — If the persisted provider type was `google` from a previous session but valid Microsoft tokens existed in localStorage, boot would create a GoogleAuth provider that found no session and show the sign-in screen. Now checks for a Microsoft account hint and switches providers automatically.
 - **Stale MSAL interaction state blocking sign-in** — Added `cleanUpStaleState()` before `loginRedirect()` to remove stale interaction keys from interrupted redirects or unclean PWA shutdowns that could silently block the redirect with an `interaction_in_progress` error.
+- **"Authentication error" crash on first visit / cleared storage** — The fast-path `isSignedIn()` check in `renderSignIn` called `getAuth()` before providers were initialised (new user or cleared storage), throwing and triggering the boot error screen. Added `hasProviders()` guard.
 
 ---
 
