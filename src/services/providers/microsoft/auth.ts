@@ -174,6 +174,10 @@ export class MicrosoftAuthProvider implements AuthProvider {
    */
   async signIn(): Promise<ProviderAccountInfo | null> {
     const msal = this.getMsal();
+    // Remove stale interaction state (e.g. from interrupted redirects or unclean
+    // PWA shutdowns) before starting a new redirect. Without this, MSAL can
+    // silently block loginRedirect with an interaction_in_progress error.
+    this.cleanUpStaleState();
     await msal.loginRedirect({
       scopes: LOGIN_SCOPES,
       prompt: 'select_account',

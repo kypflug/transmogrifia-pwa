@@ -6,6 +6,14 @@ export function renderSignIn(
   onSuccess: () => void,
   onProviderSelected?: (type: AuthProviderType) => Promise<void>,
 ): void {
+  // Fast-path: if already signed in (e.g. MSAL loaded accounts from
+  // localStorage after boot's auth check completed), skip straight to
+  // the app instead of showing the sign-in screen.
+  if (isSignedIn()) {
+    onSuccess();
+    return;
+  }
+
   let signInInitiated = false;
   let resolved = false;
 

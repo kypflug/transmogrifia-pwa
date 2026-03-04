@@ -1,7 +1,7 @@
 import { initAuth, signIn, isSignedIn, tryRecoverAuth, refreshTokenOnResume, hasAccountHint, signInWithHint, setupBackgroundBackup } from './services/auth';
 import { restoreMsalCacheIfNeeded } from './services/msal-cache-backup';
 import { restoreGoogleTokensIfNeeded } from './services/providers/google/token-backup';
-import { setProviders, getProviderType } from './services/providers/registry';
+import { setProviders, getProviderType, hasProviders } from './services/providers/registry';
 import { createMicrosoftAuth } from './services/providers/microsoft/auth';
 import { createOneDriveStorage } from './services/providers/microsoft/storage';
 import { createGoogleAuth } from './services/providers/google/auth';
@@ -162,6 +162,22 @@ async function boot(app: HTMLElement): Promise<void> {
         renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
       }
     } else {
+      // Provider auth failed with no recovery evidence. Before showing sign-in,
+      // check if a different provider has a valid session. This handles the case
+      // where the user previously signed in with Microsoft, then the provider
+      // type was set to 'google' (or vice versa) and the current provider's auth
+      // fails because it has no tokens.
+      if (detectedType !== 'microsoft' && hasMsalAccountHint()) {
+        console.info('[Boot] Detected provider is %s but Microsoft account hint exists — switching', detectedType);
+        initializeProviders('microsoft');
+        await initAuth();
+        if (isSignedIn()) {
+          clearAutoRedirectMark();
+          await prefsReady;
+          enterApp(app);
+          return;
+        }
+      }
       renderSignIn(app, () => enterApp(app), handleProviderSelected(app));
     }
   } else {
@@ -216,10 +232,21 @@ function detectProviderFromUrl(): AuthProviderType | null {
 /**
  * Create the onProviderSelected callback for the sign-in screen.
  * When a user clicks a sign-in button, this sets up the provider and initiates sign-in.
+ *
+ * Important: if boot() already initialised the requested provider type, we reuse the
+ * existing instance rather than creating a new one. Creating a fresh provider would
+ * discard the initialised MSAL instance, causing signIn() → getMsal() to throw
+ * "MSAL not initialised" and making the button appear to do nothing.
  */
 function handleProviderSelected(_app: HTMLElement): (type: AuthProviderType) => Promise<void> {
   return async (type: AuthProviderType) => {
-    initializeProviders(type);
+    if (getProviderType() !== type || !hasProviders()) {
+      initializeProviders(type);
+    }
+    // Ensure the auth library is initialised before attempting sign-in.
+    // On the first call this creates the MSAL instance; on subsequent calls
+    // it's a no-op (redirectHandled guard).
+    await initAuth();
     await signIn();
     // signIn() redirects away; this code won't continue on regular browsers.
     // On iOS PWA the visibilitychange handler in sign-in.ts handles the return.
@@ -229,6 +256,22 @@ function handleProviderSelected(_app: HTMLElement): (type: AuthProviderType) => 
 // ─── Auto-redirect helpers (iOS session recovery) ───
 
 const AUTO_REDIRECT_KEY = 'transmogrifia_auto_redirect';
+const MSAL_ACCOUNT_HINT_KEY = 'transmogrifia_account_hint';
+
+/**
+ * Check whether a Microsoft account hint exists in localStorage.
+ * This is set by MicrosoftAuthProvider on any successful sign-in and
+ * persists across provider switches. Used during boot to detect when the
+ * persisted provider type is 'google' but the user actually has a
+ * Microsoft session available.
+ */
+function hasMsalAccountHint(): boolean {
+  try {
+    return localStorage.getItem(MSAL_ACCOUNT_HINT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
 
 /** True if we haven't already attempted an auto-redirect this session. */
 function canAutoRedirect(): boolean {
